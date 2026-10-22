@@ -1,0 +1,53 @@
+VM Lifecycle Toolkit — Proprietary License
+
+Copyright (c) 2025-2026 Rémi Rousselot
+All rights reserved.
+
+This software and its associated documentation (the "Software") are the
+exclusive property of Rémi Rousselot. The Software is made available on
+this public GitHub repository strictly for viewing and reference
+purposes.
+
+PERMITTED
+
+- Viewing the Software's source code on this public GitHub repository.
+
+STRICTLY PROHIBITED without prior written permission from the copyright
+holder
+
+- Copying, cloning, downloading, forking, or otherwise reproducing the
+  Software, in whole or in part, for any purpose other than brief
+  personal reference while viewing on GitHub.
+- Redistributing, republishing, mirroring, hosting, or sharing the
+  Software or any derivative work, in any form, on any platform.
+- Modifying, adapting, translating, reverse-engineering, or creating
+  derivative works based on the Software.
+- Using the Software, in whole or in part, in any production,
+  commercial, educational, personal, or non-commercial environment,
+  including without limitation building VM templates, provisioning
+  virtual machines, or integrating with any infrastructure.
+- Claiming authorship, ownership, co-authorship, or any form of
+  attribution over the Software or any portion of it.
+- Selling, sublicensing, leasing, renting, or otherwise commercially
+  exploiting the Software.
+
+Any usage beyond pure visual inspection on GitHub requires prior
+written permission from the copyright holder, obtainable via
+remi.rousselot91@gmail.com.
+
+The copyright holder reserves the right to revoke this limited viewing
+permission at any time, without notice.
+
+NO WARRANTY
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES
+OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
+Author:  Rémi Rousselot
+Project: VM Lifecycle Toolkit
+Contact: remi.rousselot91@gmail.com

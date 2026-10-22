@@ -1,0 +1,115 @@
+# ============================================================
+# VM Lifecycle Toolkit — .gitignore
+# ============================================================
+
+# ---------- Packer ----------
+# Local plugin cache & crash logs
+packer_cache/
+crash.log
+.crash.log
+
+# Build output directories
+output-*/
+
+# Local override var files — may contain secrets, never commit
+*.pkrvars.hcl.local
+*.auto.pkrvars.hcl
+*.auto.pkrvars.hcl.json
+
+# ---------- Terraform (planned V3.7+) ----------
+# Local state files — contain secrets, never commit
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+# Local .terraform/ working directory and lockfile
+.terraform/
+.terraform.lock.hcl
+
+# Terraform crash logs
+crash.*.log
+
+# tfvars often contain secrets
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# ---------- Ansible (planned V3.7+) ----------
+*.retry
+.vault_password
+vault-password
+*.vault-password.txt
+inventory.local
+hosts.local
+
+# ---------- Secrets & keys (never commit) ----------
+*.pem
+*.key
+*.priv
+*.crt
+.id_*
+*_rsa
+*_dsa
+*_ecdsa
+*_ed25519
+.env
+.env.local
+.envrc
+secrets/
+.secrets
+
+# ---------- OS files ----------
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# ---------- Editor / IDE files ----------
+# VS Code
+.vscode/
+*.code-workspace
+
+# JetBrains (IntelliJ, PyCharm, etc.)
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*.swn
+Session.vim
+tags
+
+# Emacs
+\#*\#
+.\#*
+
+# ---------- Backup / temp files ----------
+*.bak
+*.orig
+*.tmp
+*.old
