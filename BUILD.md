@@ -166,7 +166,10 @@ pveum user add packer@pam
 pveum aclmod / -user packer@pam -role PVEVMAdmin
 pveum aclmod /storage/local -user packer@pam -role PVEDatastoreAdmin
 pveum aclmod /storage/local-lvm -user packer@pam -role PVEDatastoreAdmin
+pveum aclmod /sdn/zones/localnetwork -user packer@pam -role PVESDNUser
 ```
+
+> 📌 **Note on `PVESDNUser` (Proxmox VE 8+)**: Starting with Proxmox VE 8, traditional network bridges (`vmbr*`) are managed under the SDN (Software-Defined Networking) framework. Attaching a VM to a bridge now requires the `SDN.Use` permission (granted via the `PVESDNUser` role) on `/sdn/zones/<zone>/<bridge>`. The default auto-created zone that wraps traditional bridges is `localnetwork`. Without this grant, the Packer build fails during VM creation with `403 Permission check failed (/sdn/zones/localnetwork/vmbr0, SDN.Use)`. On older Proxmox VE 7.x, this line can be safely omitted (the SDN check is not enforced).
 
 ### 1a.2 Create an API Token
 
