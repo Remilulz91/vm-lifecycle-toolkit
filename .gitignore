@@ -37,13 +37,18 @@ override.tf.json
 *_override.tf
 *_override.tf.json
 
-# ---------- Ansible (planned V3.7+) ----------
+# ---------- Ansible ----------
 *.retry
 .vault_password
 vault-password
 *.vault-password.txt
 inventory.local
 hosts.local
+
+# Local Ansible artifacts in the ansible/ directory
+ansible/collections/        # populated by: ansible-galaxy collection install
+ansible/venv/               # populated by: python3 -m venv venv
+ansible/ansible.log         # populated by Ansible at runtime (log_path in ansible.cfg)
 
 # ---------- Secrets & keys (never commit) ----------
 *.pem

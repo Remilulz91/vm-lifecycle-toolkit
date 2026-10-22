@@ -1,0 +1,27 @@
+---
+# ============================================================
+# Clone VMs from Packer-built Proxmox templates
+# ============================================================
+#
+# Usage (from the ansible/ directory):
+#
+#   # Set credentials via env vars (never commit)
+#   export PROXMOX_API_HOST=192.168.1.10
+#   export PROXMOX_NODE=pve01
+#   export PROXMOX_API_TOKEN_SECRET=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+#
+#   # Clone every VM listed in inventories/proxmox/hosts.yml
+#   ansible-playbook playbooks/clone-from-template.yml
+#
+#   # Or clone only one specific VM from the inventory
+#   ansible-playbook playbooks/clone-from-template.yml --limit debian-example-01
+# ============================================================
+
+- name: Clone VMs from Packer-built Proxmox templates
+  hosts: proxmox_clones
+  gather_facts: false
+  # The target VM doesn't exist yet; we run everything from the controller.
+  connection: local
+
+  roles:
+    - role: proxmox_clone

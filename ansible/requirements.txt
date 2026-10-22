@@ -1,0 +1,19 @@
+# ============================================================
+# Python dependencies — VM Lifecycle Toolkit (Ansible side)
+# ============================================================
+#
+# Install with:
+#   pip install -r requirements.txt
+#
+# These libraries are required by the Proxmox Ansible modules
+# shipped in community.general.
+# ============================================================
+
+# Proxmox API client used by community.proxmox.proxmox_* modules.
+# Version 2.3+ is required by recent community.proxmox collection releases.
+# ⚠️ On Debian 13 / Ubuntu 24.04, the system package python3-proxmoxer ships
+# version 2.2.0 which is TOO OLD. Install via pip inside a venv (see README).
+proxmoxer>=2.3.0
+
+# HTTP client used by proxmoxer
+requests>=2.31.0

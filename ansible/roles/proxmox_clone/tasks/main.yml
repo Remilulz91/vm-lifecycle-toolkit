@@ -1,0 +1,82 @@
+---
+# ============================================================
+# proxmox_clone — role tasks
+# ============================================================
+# Clones a VM from a Packer-built Proxmox template, applies
+# optional hardware overrides, starts the clone, and (optionally)
+# waits for SSH on a user-provided IP.
+# ============================================================
+
+- name: Validate required inventory variables
+  ansible.builtin.assert:
+    that:
+      - source_template_vmid is defined
+      - target_vmid is defined
+      - target_name is defined
+    fail_msg: >-
+      Each inventory host must define source_template_vmid, target_vmid
+      and target_name. See ansible/inventories/proxmox/hosts.yml for an example.
+
+- name: Clone VM from Packer template
+  community.proxmox.proxmox_kvm:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ proxmox_api_user }}"
+    api_token_id: "{{ proxmox_api_token_id.split('!')[1] }}"
+    api_token_secret: "{{ proxmox_api_token_secret }}"
+    validate_certs: "{{ proxmox_api_validate_certs }}"
+    node: "{{ proxmox_node }}"
+    # community.proxmox.proxmox_kvm clone API:
+    #   clone  : non-empty string, just a trigger that says "do a clone operation"
+    #   vmid   : SOURCE template VMID (what we clone FROM)
+    #   newid  : DESTINATION VMID for the new clone
+    #   name   : name of the new VM (shown in Proxmox UI)
+    clone: "{{ target_name }}"                # trigger (any non-empty value)
+    vmid: "{{ source_template_vmid }}"        # source template VMID
+    newid: "{{ target_vmid }}"                # new VMID for the clone
+    name: "{{ target_name }}"                 # new VM name
+    full: "{{ clone_mode == 'full' }}"
+    state: present
+    timeout: "{{ clone_timeout_seconds }}"
+
+- name: Apply hardware overrides (if provided in inventory)
+  community.proxmox.proxmox_kvm:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ proxmox_api_user }}"
+    api_token_id: "{{ proxmox_api_token_id.split('!')[1] }}"
+    api_token_secret: "{{ proxmox_api_token_secret }}"
+    validate_certs: "{{ proxmox_api_validate_certs }}"
+    node: "{{ proxmox_node }}"
+    vmid: "{{ target_vmid }}"
+    cores: "{{ target_cores | default(omit) }}"
+    memory: "{{ target_memory_mb | default(omit) }}"
+    update: true
+  when: (target_cores is defined) or (target_memory_mb is defined)
+
+- name: Start the cloned VM
+  community.proxmox.proxmox_kvm:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ proxmox_api_user }}"
+    api_token_id: "{{ proxmox_api_token_id.split('!')[1] }}"
+    api_token_secret: "{{ proxmox_api_token_secret }}"
+    validate_certs: "{{ proxmox_api_validate_certs }}"
+    node: "{{ proxmox_node }}"
+    vmid: "{{ target_vmid }}"
+    state: started
+    timeout: "{{ clone_timeout_seconds }}"
+
+- name: Wait for SSH on the cloned VM (only if target_ip is defined in inventory)
+  ansible.builtin.wait_for:
+    host: "{{ target_ip }}"
+    port: 22
+    delay: 10
+    timeout: "{{ ssh_wait_timeout_seconds }}"
+    state: started
+  when: target_ip is defined
+
+- name: Report clone success
+  ansible.builtin.debug:
+    msg: >-
+      Clone complete: {{ target_name }} (vmid={{ target_vmid }}, source template={{ source_template_vmid }})
+      {%- if target_ip is defined %} started and reachable via SSH at {{ target_ip }}.
+      {%- else %} started on node {{ proxmox_node }}. SSH wait skipped (no target_ip in inventory).
+      {%- endif %}

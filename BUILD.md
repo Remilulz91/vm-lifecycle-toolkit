@@ -219,6 +219,74 @@ These go in `hypervisors/esxi/profiles/site/esxi.pkrvars.hcl` as `datastore` and
 
 Standalone ESXi does not issue API tokens. The build uses username/password authentication. Store the username in `esxi.pkrvars.hcl` and pass the password at build time via `-var "vsphere_password=..."`.
 
+## 🧩 Step 1c — Ansible user on Proxmox (V3.7+)
+
+> 📌 **Required only if you plan to use the Ansible side of the project** (cloning VMs from Packer-built templates — see [ansible/README.md](ansible/README.md)). If you only use Packer to build templates, skip this step.
+
+The Ansible playbooks need a **dedicated service account** on Proxmox with permissions to clone, configure and start VMs. We keep this user distinct from the `packer@pam` user so the two sides of the stack can be audited and revoked independently.
+
+### 1c.1 Create the Ansible user & permissions
+
+Run on your Proxmox node (as root):
+
+```bash
+pveum user add ansible@pam
+pveum aclmod / -user ansible@pam -role PVEVMAdmin
+pveum aclmod /storage/local -user ansible@pam -role PVEDatastoreAdmin
+pveum aclmod /storage/local-lvm -user ansible@pam -role PVEDatastoreAdmin
+pveum aclmod /sdn/zones/localnetwork -user ansible@pam -role PVESDNUser
+```
+
+> Permissions mirror those of the Packer user: `PVEVMAdmin` covers VM lifecycle (clone, config, start/stop), `PVEDatastoreAdmin` covers storage allocation during the clone, and `PVESDNUser` covers network bridge attachment on Proxmox VE 8+ (same requirement as Packer — see note under step 1a.1).
+
+### 1c.2 Create an API token for Ansible
+
+```bash
+pveum user token add ansible@pam ci --privsep 0
+```
+
+Output:
+- 📦 Token ID → `ansible@pam!ci`
+- Token Secret → used by Ansible at runtime via the `PROXMOX_API_TOKEN_SECRET` environment variable (or encrypted with `ansible-vault` — see [ansible/README.md](ansible/README.md))
+
+### 1c.3 Install Ansible dependencies on the controller
+
+On the machine that will run `ansible-playbook` (your laptop, a CI runner, etc.):
+
+#### Python dependencies
+
+> ⚠️ **Debian 13 / Ubuntu 24.04 note**: the system package `python3-proxmoxer` ships **version 2.2.0**, which is **too old** for the current `community.proxmox` collection (requires proxmoxer **≥ 2.3**). You cannot rely on `sudo apt install python3-proxmoxer` — you need pip-based install. And `pip install` on the system Python is blocked by PEP 668. **→ Use a venv.**
+
+**Option A — Virtual environment (recommended, cross-distro)**
+
+```bash
+cd ansible/
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+Remember to `source venv/bin/activate` at the start of every new shell session before running `ansible-playbook`.
+
+**Option B — Break system packages (last resort, Debian/Ubuntu)**
+
+```bash
+# Remove the apt-shipped version first (2.2.0, incompatible):
+sudo apt remove python3-proxmoxer python3-requests
+
+# Install the pip version system-wide, overriding PEP 668:
+pip install --break-system-packages -r requirements.txt
+```
+
+#### Ansible collections (into `./collections/`, not system-wide)
+
+```bash
+cd ansible/
+ansible-galaxy collection install -r requirements.yml
+```
+
+For the detailed usage of the Ansible playbooks (how to describe VMs to clone, how to run the playbook, how to limit to a specific host, how to handle secrets with `ansible-vault`), see [ansible/README.md](ansible/README.md).
+
 ## 🌐 Step 2 — SSH Connectivity (Packer → Hypervisor)
 
 On your Packer machine, generate an SSH key pair (if you don't already have one):

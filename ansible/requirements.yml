@@ -1,0 +1,26 @@
+---
+# ============================================================
+# Ansible Collections — VM Lifecycle Toolkit
+# ============================================================
+#
+# Install with:
+#   ansible-galaxy collection install -r requirements.yml
+#
+# Collections install into ./collections/ (set by ansible.cfg),
+# so no system-wide install is needed.
+# ============================================================
+
+collections:
+  # Dedicated Proxmox collection (spun off from community.general in 2024).
+  # Contains proxmox_kvm, proxmox_vm_info, proxmox_node, etc.
+  - name: community.proxmox
+    version: ">=1.0.0"
+
+  # Still useful for other general-purpose modules we may add later
+  # (and the proxmox_* modules remain here too until community.general 15.0.0).
+  - name: community.general
+    version: ">=8.0.0"
+
+  # Standard POSIX modules (file permissions, synchronize, authorized_key, etc.)
+  - name: ansible.posix
+    version: ">=1.5.0"

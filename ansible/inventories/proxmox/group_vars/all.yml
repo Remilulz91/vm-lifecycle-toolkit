@@ -1,0 +1,43 @@
+---
+# ============================================================
+# Shared variables for all Proxmox clone operations
+# ============================================================
+#
+# Sensitive values (API token secret, VM passwords) MUST NOT be
+# committed to git. Pass them at runtime via environment variables,
+# OR encrypt a dedicated vars file with ansible-vault.
+# ============================================================
+
+# ---------- Proxmox API endpoint ----------
+# IP or FQDN of your Proxmox node (set via env var: PROXMOX_API_HOST)
+proxmox_api_host: "{{ lookup('env', 'PROXMOX_API_HOST') | default('192.168.1.10', true) }}"
+
+# API user (dedicated service account — see BUILD.md "Ansible setup")
+proxmox_api_user: "ansible@pam"
+
+# API token ID in the format <user>!<token_name>
+# (created with: pveum user token add ansible@pam ci --privsep 0)
+proxmox_api_token_id: "ansible@pam!ci"
+
+# Secret value for the API token — NEVER commit.
+# Set at runtime via: export PROXMOX_API_TOKEN_SECRET=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+proxmox_api_token_secret: "{{ lookup('env', 'PROXMOX_API_TOKEN_SECRET') }}"
+
+# Proxmox node name (where VMs will be cloned onto)
+proxmox_node: "{{ lookup('env', 'PROXMOX_NODE') | default('pve01', true) }}"
+
+# TLS verification. Set to false for self-signed certs (typical on a lab/homelab
+# Proxmox install), true if you've deployed a proper CA-signed certificate.
+# Equivalent of `insecure_connection = true` in the Packer vsphere-iso plugin.
+proxmox_api_validate_certs: false
+
+# ---------- Clone behavior ----------
+# "full"   = full independent clone (safer, uses more disk space)
+# "linked" = linked clone (uses less disk space but ties the clone to the template)
+clone_mode: "full"
+
+# Timeout (seconds) for the clone + start operations
+clone_timeout_seconds: 600
+
+# Timeout (seconds) for waiting on SSH after start (used only if target_ip is set)
+ssh_wait_timeout_seconds: 300

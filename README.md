@@ -1,7 +1,7 @@
 # 🧱 VM Lifecycle Toolkit — Build & Deploy VMs on Proxmox and ESXi
 
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v3.6-blue.svg)](README.md)
+[![Version](https://img.shields.io/badge/version-v3.7-blue.svg)](README.md)
 [![Packer](https://img.shields.io/badge/Packer-%E2%89%A51.11.0-blueviolet.svg)](https://www.packer.io/)
 [![Hypervisors](https://img.shields.io/badge/Hypervisors-Proxmox%20%7C%20ESXi-orange.svg)](README.md)
 [![OSes](https://img.shields.io/badge/OSes-Debian%20%7C%20Ubuntu%20%7C%20Windows%2011-green.svg)](README.md)
@@ -27,7 +27,7 @@ The Packer side includes complete working implementations for **Debian 13**, **U
 
 ---
 
-# 📁 Repository Layout (V3.6 — Multi-OS, Multi-Hypervisor, Multi-Tool)
+# 📁 Repository Layout (V3.7 — Multi-OS, Multi-Hypervisor, Multi-Tool)
 
 ```bash
 vm-lifecycle-toolkit/
@@ -110,11 +110,34 @@ vm-lifecycle-toolkit/
 │            ├─ hard.pkrvars.hcl
 │            └─ extreme.pkrvars.hcl
 │
-├─ ansible/                                     ← [Planned V3.7+] VM configuration & cloning via Ansible
-├─ terraform/                                   ← [Planned V3.7+] VM cloning via Terraform
+├─ ansible/                                     ← V3.7: Clone VMs from Packer templates (Proxmox-first)
+│  ├─ ansible.cfg                               (Ansible config)
+│  ├─ requirements.yml                          (collections: community.general, ansible.posix)
+│  ├─ requirements.txt                          (Python: proxmoxer, requests)
+│  ├─ inventories/
+│  │  └─ proxmox/
+│  │     ├─ hosts.yml                           (static inventory — VMs to clone)
+│  │     └─ group_vars/all.yml                  (Proxmox API endpoint, user, timeouts)
+│  ├─ playbooks/
+│  │  └─ clone-from-template.yml                (entry-point playbook)
+│  ├─ roles/
+│  │  └─ proxmox_clone/                         (role: clone + optional SSH wait)
+│  └─ README.md
+│
+├─ terraform/                                   ← [Planned V3.8+] VM cloning via Terraform
 ├─ LICENSE
 └─ README.md
 ```
+
+✔ What changed in V3.7?
+
+- **Added Ansible side** of the project — new top-level `ansible/` directory with scaffolding for cloning VMs from Packer-built templates on Proxmox.
+- New `proxmox_clone` role (based on `community.general.proxmox_kvm`): clones a template VM, applies optional hardware overrides, starts the clone, and (optionally) waits for SSH on a user-provided IP.
+- Static YAML inventory format for describing VMs to clone (`ansible/inventories/proxmox/hosts.yml`). Dynamic inventory planned for V3.7.3.
+- Dedicated `ansible@pam` user on Proxmox (parallel to `packer@pam`) with its own API token — setup documented in BUILD.md Step 1c.
+- Entry-point playbook: `ansible/playbooks/clone-from-template.yml`.
+- Dedicated `ansible/README.md` with install steps, quick-start, secrets handling (env var or `ansible-vault`) and roadmap.
+- **Minimal scope on purpose**: V3.7 only clones + starts VMs. Post-clone configuration (base_config, docker_host, webserver, etc.) planned for V3.7.1+. ESXi support planned for V3.7.2 (via `community.vmware` OVF deploy).
 
 ✔ What changed in V3.6?
 
@@ -376,5 +399,5 @@ The copyright holder reserves the right to revoke this limited viewing permissio
 
 **Author:** Rémi Rousselot  
 **Project:** VM Lifecycle Toolkit  
-**Version:** V3.6  
+**Version:** V3.7  
 **Contact:** [remi.rousselot91@gmail.com](mailto:remi.rousselot91@gmail.com)
