@@ -1,7 +1,7 @@
 # 🧱 VM Lifecycle Toolkit — Build & Deploy VMs on Proxmox and ESXi
 
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v3.7.7-blue.svg)](README.md)
+[![Version](https://img.shields.io/badge/version-v3.8-blue.svg)](README.md)
 [![Packer](https://img.shields.io/badge/Packer-%E2%89%A51.11.0-blueviolet.svg)](https://www.packer.io/)
 [![Hypervisors](https://img.shields.io/badge/Hypervisors-Proxmox%20%7C%20ESXi-orange.svg)](README.md)
 [![OSes](https://img.shields.io/badge/OSes-Debian%20%7C%20Ubuntu%20%7C%20Windows%2011-green.svg)](README.md)
@@ -96,19 +96,43 @@ vm-lifecycle-toolkit/
 │     │  ├─ windows_11.pkr.hcl
 │     │  └─ variables.pkr.hcl
 │     │
-│     └─ profiles/
-│        ├─ site/
-│        │   └─ proxmox.pkrvars.hcl
-│        ├─ os/
-│        │   ├─ debian_13.pkrvars.hcl
-│        │   ├─ ubuntu_26_04_server.pkrvars.hcl
-│        │   ├─ ubuntu_26_04_desktop.pkrvars.hcl
-│        │   └─ windows_11.pkrvars.hcl
-│        └─ flavors/
-│            ├─ light.pkrvars.hcl
-│            ├─ medium.pkrvars.hcl
-│            ├─ hard.pkrvars.hcl
-│            └─ extreme.pkrvars.hcl
+│  │  └─ profiles/
+│  │     ├─ site/
+│  │     │   └─ proxmox.pkrvars.hcl
+│  │     ├─ os/
+│  │     │   ├─ debian_13.pkrvars.hcl
+│  │     │   ├─ ubuntu_26_04_server.pkrvars.hcl
+│  │     │   ├─ ubuntu_26_04_desktop.pkrvars.hcl
+│  │     │   └─ windows_11.pkrvars.hcl
+│  │     └─ flavors/
+│  │         ├─ light.pkrvars.hcl
+│  │         ├─ medium.pkrvars.hcl
+│  │         ├─ hard.pkrvars.hcl
+│  │         └─ extreme.pkrvars.hcl
+│  │
+│  └─ qemu/                                      ← V3.8: local qcow2 builder (libvirt / Cockpit)
+│     ├─ linux/
+│     │  ├─ http/
+│     │  │  ├─ debian/
+│     │  │  │  └─ preseed.pkrtpl.hcl
+│     │  │  └─ ubuntu/
+│     │  │     └─ user-data.pkrtpl.hcl
+│     │  ├─ plugins.pkr.hcl                      (hashicorp/qemu plugin)
+│     │  ├─ debian.pkr.hcl
+│     │  ├─ ubuntu.pkr.hcl
+│     │  └─ variables.pkr.hcl                   (NB: no remote-hypervisor vars; local KVM build)
+│     ├─ profiles/
+│     │  ├─ site/
+│     │  │   └─ qemu.pkrvars.hcl                 (accelerator, headless, output dir)
+│     │  ├─ os/
+│     │  │   ├─ debian_13.pkrvars.hcl
+│     │  │   └─ ubuntu_26_04_server.pkrvars.hcl
+│     │  └─ flavors/
+│     │      ├─ light.pkrvars.hcl
+│     │      ├─ medium.pkrvars.hcl
+│     │      ├─ hard.pkrvars.hcl
+│     │      └─ extreme.pkrvars.hcl
+│     └─ README.md
 │
 ├─ ansible/                                     ← V3.7: Clone VMs from Packer templates (Proxmox-first)
 │  ├─ ansible.cfg                               (Ansible config)
@@ -141,6 +165,15 @@ vm-lifecycle-toolkit/
 ├─ LICENSE
 └─ README.md
 ```
+
+✔ What changed in V3.8?
+
+- **Third hypervisor track added** — `hypervisors/qemu/`, parallel to `hypervisors/proxmox/` and `hypervisors/esxi/`. Instead of pushing to a remote hypervisor over an API, this one builds locally with `qemu-system-x86_64` + KVM and emits a plain **`.qcow2`** that you then import into libvirt via `virt-install --import` (visually administrable through Cockpit / `cockpit-machines`).
+- **Covers Debian 13 and Ubuntu 26.04 Server** via the same preseed / autoinstall paths as the Proxmox side — same locale, keyboard, timezone, partitioning scheme, SSH hardening. Headless by default (QEMU window off); flip `qemu_headless=false` to watch the install.
+- **QEMU-specific site vars** (`profiles/site/qemu.pkrvars.hcl`): accelerator (`kvm` / `tcg`), headless flag, disk / NIC devices (`virtio-scsi`, `virtio-net`), optional explicit output directory. OS profiles use `iso_url` + `iso_checksum` instead of a Proxmox storage pool reference — both `file:///…` and `https://` URLs are supported.
+- **Offline `.deb` cache shared with the Proxmox track** — rather than duplicating `qemu-guest-agent` packages, the QEMU `.pkr.hcl` files reference `../../proxmox/linux/offline/{debian,ubuntu}/debs/`. One set of files feeds both hypervisors.
+- **`hypervisors/qemu/README.md`** documents prerequisites (`qemu-system-x86`, `ovmf`, `/dev/kvm` perms, Cockpit install), the Packer build, and the `virt-install --import` import step end-to-end.
+- **Linux only in this release** — Windows 11 on QEMU needs TPM 2.0 (swtpm) + OVMF + Secure Boot keys and is deferred to V3.8.1+.
 
 ✔ What changed in V3.7.7?
 
@@ -316,14 +349,26 @@ required_plugins {
 }
 ```
 
+**QEMU/KVM** (`qemu/linux/plugins.pkr.hcl`):
+
+```hcl
+required_plugins {
+  qemu = {
+    source  = "github.com/hashicorp/qemu"
+    version = ">= 1.1.0"
+  }
+}
+```
+
 # 📝 Summary
 
-| Component              | Requirement | Reason                                                  |
-| ---------------------- | ----------- | ------------------------------------------------------- |
-| **Packer**             | ≥ 1.11.0    | Needed for plugin system and modern HCL behavior        |
-| **Proxmox plugin**     | ≥ 1.1.0     | Ensures compatibility with Proxmox ISO builder features |
-| **vSphere plugin**     | ≥ 1.0.0     | Ensures compatibility with ESXi ISO builder features    |
-| **No manual download** | ✔️          | Packer fetches the plugin automatically at runtime      |
+| Component              | Requirement | Reason                                                   |
+| ---------------------- | ----------- | -------------------------------------------------------- |
+| **Packer**             | ≥ 1.11.0    | Needed for plugin system and modern HCL behavior         |
+| **Proxmox plugin**     | ≥ 1.1.0     | Ensures compatibility with Proxmox ISO builder features  |
+| **vSphere plugin**     | ≥ 1.0.0     | Ensures compatibility with ESXi ISO builder features     |
+| **QEMU plugin**        | ≥ 1.1.0     | Ensures compatibility with local KVM `.qcow2` builds     |
+| **No manual download** | ✔️          | Packer fetches the plugin automatically at runtime       |
 
 If these requirements are not met, Packer may fail to run or produce an invalid VM template.
 
@@ -482,5 +527,5 @@ The copyright holder reserves the right to revoke this limited viewing permissio
 
 **Author:** Rémi Rousselot  
 **Project:** VM Lifecycle Toolkit  
-**Version:** V3.7.7  
+**Version:** V3.8  
 **Contact:** [remi.rousselot91@gmail.com](mailto:remi.rousselot91@gmail.com)
