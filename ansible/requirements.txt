@@ -17,3 +17,7 @@ proxmoxer>=2.3.0
 
 # HTTP client used by proxmoxer
 requests>=2.31.0
+
+# VMware vSphere SDK — required by community.vmware modules
+# (vmware_deploy_ovf, vmware_guest, …) used by the esxi_deploy role (V3.7.5+).
+pyvmomi>=8.0.0

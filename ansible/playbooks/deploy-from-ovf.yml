@@ -1,0 +1,34 @@
+---
+# ============================================================
+# Deploy VMs to standalone ESXi from local OVF/OVA bundles
+# ============================================================
+#
+# Prerequisite: the OVF/OVA has been exported once from the
+# Packer-built template with ovftool, and stored under
+# ansible/ovf-sources/<template>/.
+#
+# Usage (from the ansible/ directory):
+#
+#   # Set credentials via env vars (never commit)
+#   export ESXI_HOSTNAME=esxi01.lan
+#   export ESXI_PASSWORD=xxxxxxxx
+#
+#   # Deploy every VM listed in inventories/esxi/hosts.yml
+#   # (covers both Linux `esxi_clones` and Windows `esxi_windows_clones`)
+#   ansible-playbook -i inventories/esxi/ playbooks/deploy-from-ovf.yml
+#
+#   # Or deploy only one specific VM
+#   ansible-playbook -i inventories/esxi/ playbooks/deploy-from-ovf.yml \
+#       --limit debian-esxi-01
+# ============================================================
+
+- name: Deploy VMs to ESXi from local OVF/OVA bundles
+  # Covers both Linux (esxi_clones) and Windows (esxi_windows_clones).
+  # The deploy operation is OS-agnostic — the OVF carries everything.
+  hosts: esxi_clones:esxi_windows_clones
+  gather_facts: false
+  # The target VM doesn't exist yet; everything runs from the controller.
+  connection: local
+
+  roles:
+    - role: esxi_deploy

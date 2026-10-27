@@ -29,3 +29,8 @@ collections:
   # win_copy, win_firewall_rule, etc.) — required by base_config_windows (V3.7.4+).
   - name: ansible.windows
     version: ">=2.0.0"
+
+  # VMware modules — required by esxi_deploy (V3.7.5+).
+  # Needs pyvmomi (listed in requirements.txt).
+  - name: community.vmware
+    version: ">=4.0.0"

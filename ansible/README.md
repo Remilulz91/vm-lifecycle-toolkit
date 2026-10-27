@@ -13,13 +13,20 @@ ansible/
 ├── requirements.yml                     # Ansible collections (community.general, ansible.posix)
 ├── requirements.txt                     # Python dependencies (proxmoxer, requests)
 ├── inventories/
-│   └── proxmox/
-│       ├── hosts.yml                    # Static list of VMs to clone (edit this!)
+│   ├── proxmox/
+│   │   ├── hosts.yml                    # Static list of VMs to clone on Proxmox
+│   │   └── group_vars/
+│   │       ├── all.yml                  # Proxmox endpoint, user, timeouts, SSH
+│   │       └── windows_clones.yml       # Windows SSH + PowerShell vars
+│   └── esxi/                            ← V3.7.5: Standalone ESXi deploy
+│       ├── hosts.yml                    # Static list of VMs to deploy on ESXi
 │       └── group_vars/
-│           └── all.yml                  # Shared vars (Proxmox endpoint, user, timeouts)
+│           ├── all.yml                  # ESXi endpoint, datastore, network
+│           └── esxi_windows_clones.yml  # Windows SSH + PowerShell vars
 ├── playbooks/
-│   ├── clone-from-template.yml          # Step 1: clone + start (Proxmox API)
-│   └── configure-vm.yml                 # Step 2: SSH-based baseline config
+│   ├── clone-from-template.yml          # Step 1 (Proxmox): clone + start
+│   ├── deploy-from-ovf.yml              # Step 1 (ESXi): deploy OVF + start
+│   └── configure-vm.yml                 # Step 2: SSH-based baseline config (both hypervisors)
 ├── roles/
 │   ├── proxmox_clone/                   # Role: clone + optional SSH wait
 │   │   ├── defaults/main.yml
@@ -42,9 +49,13 @@ ansible/
 │   │   ├── templates/vhost.conf.j2
 │   │   ├── templates/index.html.j2
 │   │   └── README.md
-│   └── base_config_windows/             # V3.7.4: Windows baseline (hostname, tz, admin, SSH)
+│   ├── base_config_windows/             # V3.7.4: Windows baseline (hostname, tz, admin, SSH)
+│   │   ├── defaults/main.yml
+│   │   ├── handlers/main.yml
+│   │   ├── tasks/main.yml
+│   │   └── README.md
+│   └── esxi_deploy/                     # V3.7.5: Deploy VM from OVF to standalone ESXi
 │       ├── defaults/main.yml
-│       ├── handlers/main.yml
 │       ├── tasks/main.yml
 │       └── README.md
 ├── scripts/
@@ -236,6 +247,35 @@ Connection to Windows is **SSH + PowerShell** (OpenSSH Server is pre-installed b
 
 The Windows admin user's authorized key goes to **`C:\ProgramData\ssh\administrators_authorized_keys`** (the OpenSSH Windows quirk: per-user `~/.ssh/authorized_keys` is ignored for anyone in the Administrators group). The role sets the ACL on that file to `SYSTEM` + `BUILTIN\Administrators` only.
 
+### 7. Standalone ESXi (V3.7.5+)
+
+ESXi standalone has no `MarkAsTemplate` API, so the deploy flow differs: export the Packer-built VM to OVF once with `ovftool`, store the OVF under `ansible/ovf-sources/<template>/`, then let Ansible redeploy it to the ESXi host via `community.vmware.vmware_deploy_ovf`.
+
+**One-off export** (uses VMware's [ovftool](https://developer.vmware.com/web/tool/ovf)):
+
+```bash
+ovftool \
+  vi://root@esxi01.lan/debian-13-template \
+  ansible/ovf-sources/debian-13/debian-13.ovf
+```
+
+**Deploy and configure**:
+
+```bash
+export ESXI_HOSTNAME=esxi01.lan
+export ESXI_PASSWORD=xxxxxxxx
+# (optional) ESXI_USERNAME, ESXI_DATASTORE, ESXI_NETWORK
+
+ansible-playbook -i inventories/esxi/ playbooks/deploy-from-ovf.yml
+
+export ADMIN_SSH_PUBLIC_KEY="$(cat ~/.ssh/id_ed25519.pub)"
+ansible-playbook -i inventories/esxi/ playbooks/configure-vm.yml
+```
+
+The configure playbook stays the same — `base_config` and `base_config_windows` run identically whether the VM came from Proxmox or ESXi.
+
+The directory `ansible/ovf-sources/` is `.gitignore`'d — never commit OVF binaries.
+
 ## 📦 Offline / Air-Gapped setup
 
 The entire VM Lifecycle Toolkit is designed to also run in an **air-gapped internal network** with no internet access. The Packer side already supports this (plugin cache — see top-level [BUILD.md](../BUILD.md)). The Ansible side has the same workflow via two helper scripts in `ansible/scripts/`.
@@ -314,9 +354,9 @@ Make sure to override the `proxmox_api_token_secret` lookup in `group_vars/all.y
 - **V3.7.1**           — Offline / air-gapped bundle scripts for Ansible deps
 - **V3.7.2**           — Baseline post-clone role `base_config` + `configure-vm.yml` playbook (Debian/Ubuntu)
 - **V3.7.3**           — Specialized roles: `docker_host` + `webserver` (nginx), chained via inventory groups
-- **V3.7.4 (current)** — Windows baseline role `base_config_windows` + `windows_clones` inventory group
-- **V3.7.5 (planned)** — ESXi support (OVF deploy via `community.vmware` modules)
-- **V3.7.6 (planned)** — Dynamic inventory (query Proxmox for existing VMs)
+- **V3.7.4**           — Windows baseline role `base_config_windows` + `windows_clones` inventory group
+- **V3.7.5 (current)** — Standalone ESXi deploy via OVF (`esxi_deploy` role + `inventories/esxi/` + `deploy-from-ovf.yml`)
+- **V3.7.6 (planned)** — Dynamic inventory (query Proxmox / ESXi for existing VMs)
 - **V3.7.7 (planned)** — Decommission playbook (clean VM teardown)
 
 ## 📜 License

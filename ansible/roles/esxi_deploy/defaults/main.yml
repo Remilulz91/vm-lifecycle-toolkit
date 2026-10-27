@@ -1,0 +1,33 @@
+---
+# ============================================================
+# esxi_deploy — default variables
+# ============================================================
+
+# Where the OVF/OVA source bundles live on the controller.
+# One subfolder per template, each containing a .ovf (+ .vmdk + .mf)
+# or a single .ova.
+#
+# Example layout:
+#   ansible/ovf-sources/
+#   ├── debian-13/
+#   │   ├── debian-13.ovf
+#   │   ├── debian-13-disk1.vmdk
+#   │   └── debian-13.mf
+#   └── windows-11/
+#       └── windows-11.ova
+esxi_deploy_ovf_base_dir: "{{ playbook_dir }}/../ovf-sources"
+
+# Full path to the OVF/OVA file for this host.
+# Composed from the base dir + per-host `source_ovf_dir` + `source_ovf_file`.
+esxi_deploy_ovf_path: "{{ esxi_deploy_ovf_base_dir }}/{{ source_ovf_dir }}/{{ source_ovf_file }}"
+
+# Clone mode:
+#   "thin"  = thin-provisioned disks (minimal space, grows as needed)
+#   "thick" = eager-zeroed thick disks (allocated at deploy time)
+esxi_deploy_disk_provisioning: "thin"
+
+# Timeout (seconds) for the OVF deploy + power-on operations.
+esxi_deploy_timeout_seconds: 1800
+
+# Timeout (seconds) for waiting on SSH after start (if target_ip is set).
+esxi_deploy_ssh_wait_timeout_seconds: 600

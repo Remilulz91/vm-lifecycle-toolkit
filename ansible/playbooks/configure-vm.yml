@@ -41,8 +41,12 @@
 # ============================================================
 
 # ----- 1. Baseline -----
-- name: Baseline post-clone configuration
-  hosts: proxmox_clones
+- name: Baseline post-clone configuration (Linux)
+  # Covers Linux VMs from both hypervisors — base_config over SSH is
+  # identical regardless of whether the VM was cloned on Proxmox or
+  # deployed on ESXi. If one inventory is used alone the other group
+  # is simply empty and the play is a no-op for it.
+  hosts: proxmox_clones:esxi_clones
   gather_facts: true
   become: false   # individual tasks escalate as needed
 
@@ -79,7 +83,8 @@
 
 # ----- 4. Windows baseline (V3.7.4+) -----
 - name: Baseline configuration for Windows VMs
-  hosts: windows_clones
+  # Covers Windows VMs from both hypervisors (Proxmox + ESXi).
+  hosts: windows_clones:esxi_windows_clones
   gather_facts: true
   # No `become`: on Windows SSH + PowerShell, the admin user is already
   # elevated. Any task needing SYSTEM runs its own ACL/privilege handling.

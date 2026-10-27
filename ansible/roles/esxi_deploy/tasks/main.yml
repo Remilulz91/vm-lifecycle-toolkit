@@ -1,0 +1,101 @@
+---
+# ============================================================
+# esxi_deploy — role tasks
+# ============================================================
+# Deploys a VM from a local OVF/OVA bundle to a standalone ESXi
+# host (no vCenter required). Applies optional CPU/RAM overrides,
+# powers it on, and optionally waits for SSH.
+# ============================================================
+
+- name: Validate required inventory variables
+  ansible.builtin.assert:
+    that:
+      - source_ovf_dir is defined
+      - source_ovf_file is defined
+      - target_name is defined
+      - esxi_datastore is defined
+      - esxi_network is defined
+    fail_msg: >-
+      Each ESXi inventory host must define source_ovf_dir, source_ovf_file,
+      and target_name. esxi_datastore and esxi_network come from
+      inventories/esxi/group_vars/all.yml.
+
+- name: Verify the OVF/OVA file exists on the controller
+  ansible.builtin.stat:
+    path: "{{ esxi_deploy_ovf_path }}"
+  register: ovf_stat
+  delegate_to: localhost
+
+- name: Fail fast if the OVF/OVA bundle is missing
+  ansible.builtin.assert:
+    that:
+      - ovf_stat.stat.exists
+    fail_msg: >-
+      OVF/OVA not found at {{ esxi_deploy_ovf_path }}.
+      Export it once from your Packer-built template with ovftool:
+        ovftool vi://root@{{ esxi_hostname }}/<packer-vm-name> \
+                {{ esxi_deploy_ovf_base_dir }}/{{ source_ovf_dir }}/{{ source_ovf_file }}
+
+- name: Deploy OVF to standalone ESXi host
+  community.vmware.vmware_deploy_ovf:
+    hostname: "{{ esxi_hostname }}"
+    username: "{{ esxi_username }}"
+    password: "{{ esxi_password }}"
+    validate_certs: "{{ esxi_validate_certs }}"
+    name: "{{ target_name }}"
+    ovf: "{{ esxi_deploy_ovf_path }}"
+    datastore: "{{ esxi_datastore }}"
+    networks:
+      "{{ esxi_ovf_network_label | default('VM Network') }}": "{{ esxi_network }}"
+    disk_provisioning: "{{ esxi_deploy_disk_provisioning }}"
+    allow_duplicates: false
+    power_on: false
+    wait: true
+    wait_for_ip_address: false
+    deployment_option: "{{ esxi_deploy_deployment_option | default(omit) }}"
+  delegate_to: localhost
+
+- name: Apply hardware overrides (if provided in inventory)
+  community.vmware.vmware_guest:
+    hostname: "{{ esxi_hostname }}"
+    username: "{{ esxi_username }}"
+    password: "{{ esxi_password }}"
+    validate_certs: "{{ esxi_validate_certs }}"
+    name: "{{ target_name }}"
+    datacenter: "ha-datacenter"      # standalone ESXi uses this fixed name
+    hardware:
+      num_cpus: "{{ target_cores | default(omit) }}"
+      memory_mb: "{{ target_memory_mb | default(omit) }}"
+    state: present
+  when: (target_cores is defined) or (target_memory_mb is defined)
+  delegate_to: localhost
+
+- name: Power on the deployed VM
+  community.vmware.vmware_guest:
+    hostname: "{{ esxi_hostname }}"
+    username: "{{ esxi_username }}"
+    password: "{{ esxi_password }}"
+    validate_certs: "{{ esxi_validate_certs }}"
+    name: "{{ target_name }}"
+    datacenter: "ha-datacenter"
+    state: poweredon
+  delegate_to: localhost
+
+- name: Wait for SSH on the deployed VM (only if target_ip is defined)
+  ansible.builtin.wait_for:
+    host: "{{ target_ip }}"
+    port: 22
+    delay: 10
+    timeout: "{{ esxi_deploy_ssh_wait_timeout_seconds }}"
+    state: started
+  when: target_ip is defined
+  delegate_to: localhost
+
+- name: Report deploy success
+  ansible.builtin.debug:
+    msg: >-
+      ESXi deploy complete: {{ target_name }} on {{ esxi_hostname }}
+      from {{ source_ovf_dir }}/{{ source_ovf_file }}
+      {%- if target_ip is defined %} (SSH reachable at {{ target_ip }}).
+      {%- else %} (SSH wait skipped — no target_ip in inventory).
+      {%- endif %}

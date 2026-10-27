@@ -1,0 +1,46 @@
+---
+# ============================================================
+# Shared variables for all ESXi OVF deploy operations
+# ============================================================
+#
+# Sensitive values (ESXi root password) MUST NOT be committed.
+# Pass them at runtime via environment variables, OR encrypt a
+# dedicated vars file with ansible-vault.
+# ============================================================
+
+# ---------- ESXi host endpoint ----------
+# IP or FQDN of the standalone ESXi host (set via env var ESXI_HOSTNAME)
+esxi_hostname: "{{ lookup('env', 'ESXI_HOSTNAME') | default('esxi01.lan', true) }}"
+
+# Local ESXi account used by Ansible (standalone ESXi has no API tokens;
+# user+password is the only option — same model as Packer's vsphere-iso).
+esxi_username: "{{ lookup('env', 'ESXI_USERNAME') | default('root', true) }}"
+esxi_password: "{{ lookup('env', 'ESXI_PASSWORD') }}"
+
+# TLS verification. Default to false for the self-signed cert that
+# standalone ESXi ships with. Set to true once a proper CA-signed cert
+# is in place.
+esxi_validate_certs: false
+
+# ---------- Deploy target ----------
+# Datastore where the VM's disks will live.
+esxi_datastore: "{{ lookup('env', 'ESXI_DATASTORE') | default('datastore1', true) }}"
+
+# Portgroup name on the ESXi host where the VM's NICs will be attached.
+esxi_network: "{{ lookup('env', 'ESXI_NETWORK') | default('VM Network', true) }}"
+
+# Label used in the OVF descriptor for the primary network.
+# Packer OVF exports normally use "VM Network" — override here only if
+# your exported OVF uses a different label (ovftool --net).
+esxi_ovf_network_label: "VM Network"
+
+# ---------- SSH connection to the deployed Linux VMs ----------
+ansible_host: "{{ target_ip | default(omit) }}"
+ansible_user: "{{ lookup('env', 'PACKER_SSH_USER') | default('packer', true) }}"
+ansible_ssh_private_key_file: "{{ lookup('env', 'PACKER_SSH_PRIVATE_KEY') | default('~/.ssh/id_ed25519', true) }}"
+ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+
+# ---------- base_config role settings (shared with Proxmox inventory) ----------
+base_config_admin_user: "admin"
+base_config_admin_ssh_public_key: "{{ lookup('env', 'ADMIN_SSH_PUBLIC_KEY') }}"
+base_config_timezone: "Europe/Paris"

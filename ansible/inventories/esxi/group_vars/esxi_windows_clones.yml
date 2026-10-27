@@ -1,0 +1,22 @@
+---
+# ============================================================
+# ESXi Windows VMs — SSH + PowerShell connection vars
+# ============================================================
+# Loaded automatically for every host in the `esxi_windows_clones`
+# group. Overrides the Linux SSH defaults in group_vars/all.yml.
+# ============================================================
+
+ansible_connection: ssh
+ansible_shell_type: powershell
+ansible_user: "{{ lookup('env', 'PACKER_WINDOWS_SSH_USER') | default('packer', true) }}"
+ansible_ssh_private_key_file: "{{ lookup('env', 'PACKER_SSH_PRIVATE_KEY') | default('~/.ssh/id_ed25519', true) }}"
+ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+
+# Longer timeouts for Windows deploys (OVF import is big + first boot slow).
+esxi_deploy_timeout_seconds: 3600
+esxi_deploy_ssh_wait_timeout_seconds: 1200
+
+# base_config_windows role settings — reuse the Proxmox-side env vars.
+base_config_windows_admin_user: "admin"
+base_config_windows_admin_ssh_public_key: "{{ lookup('env', 'ADMIN_SSH_PUBLIC_KEY') }}"
+base_config_windows_timezone: "Romance Standard Time"

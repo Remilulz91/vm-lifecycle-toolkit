@@ -1,7 +1,7 @@
 # 🧱 VM Lifecycle Toolkit — Build & Deploy VMs on Proxmox and ESXi
 
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v3.7.4-blue.svg)](README.md)
+[![Version](https://img.shields.io/badge/version-v3.7.5-blue.svg)](README.md)
 [![Packer](https://img.shields.io/badge/Packer-%E2%89%A51.11.0-blueviolet.svg)](https://www.packer.io/)
 [![Hypervisors](https://img.shields.io/badge/Hypervisors-Proxmox%20%7C%20ESXi-orange.svg)](README.md)
 [![OSes](https://img.shields.io/badge/OSes-Debian%20%7C%20Ubuntu%20%7C%20Windows%2011-green.svg)](README.md)
@@ -119,14 +119,16 @@ vm-lifecycle-toolkit/
 │  │     ├─ hosts.yml                           (static inventory — VMs to clone)
 │  │     └─ group_vars/all.yml                  (Proxmox API endpoint, user, timeouts)
 │  ├─ playbooks/
-│  │  ├─ clone-from-template.yml                (step 1: clone + start, Proxmox API)
-│  │  └─ configure-vm.yml                       ← V3.7.2: step 2 baseline config over SSH
+│  │  ├─ clone-from-template.yml                (step 1 Proxmox: clone + start, Proxmox API)
+│  │  ├─ deploy-from-ovf.yml                    ← V3.7.5: step 1 ESXi: OVF deploy via community.vmware
+│  │  └─ configure-vm.yml                       ← V3.7.2: step 2 baseline config over SSH (both hypervisors)
 │  ├─ roles/
 │  │  ├─ proxmox_clone/                         (role: clone + optional SSH wait)
 │  │  ├─ base_config/                           ← V3.7.2: hostname, tz, admin user, SSH hardening
 │  │  ├─ docker_host/                           ← V3.7.3: Docker CE + Compose plugin
 │  │  ├─ webserver/                             ← V3.7.3: nginx + demo vhost
-│  │  └─ base_config_windows/                   ← V3.7.4: Windows baseline (SSH + PowerShell)
+│  │  ├─ base_config_windows/                   ← V3.7.4: Windows baseline (SSH + PowerShell)
+│  │  └─ esxi_deploy/                           ← V3.7.5: OVF deploy to standalone ESXi
 │  ├─ scripts/                                  ← V3.7.1: Air-gapped bundle helpers
 │  │  ├─ prepare-offline-bundle.sh              (online host: pack collections + wheels)
 │  │  └─ install-offline-bundle.sh              (offline host: install from local bundle)
@@ -136,6 +138,19 @@ vm-lifecycle-toolkit/
 ├─ LICENSE
 └─ README.md
 ```
+
+✔ What changed in V3.7.5?
+
+- **New role `esxi_deploy`** — deploys a VM to a **standalone ESXi** host (no vCenter) from a local OVF/OVA bundle, via `community.vmware.vmware_deploy_ovf`. Validates OVF presence with a fail-fast + an `ovftool` hint, applies optional CPU/RAM overrides via `community.vmware.vmware_guest`, powers on, and optionally waits for SSH. Thin or thick provisioning configurable per inventory.
+- **Workflow note** — ESXi standalone has no `MarkAsTemplate` API, so the Packer-built VM is exported once with `ovftool` into `ansible/ovf-sources/<template>/` (gitignored, binary-heavy) and Ansible redeploys it. The one-off ovftool command is documented in `roles/esxi_deploy/README.md` and the main `ansible/README.md`.
+- **New playbook `deploy-from-ovf.yml`** — parallel to `clone-from-template.yml`. Targets `esxi_clones:esxi_windows_clones` (OS-agnostic — the OVF carries the OS).
+- **New inventory tree `inventories/esxi/`** — mirrors the Proxmox layout:
+  - `hosts.yml` with groups `esxi_clones` (Linux), `esxi_windows_clones`, plus the specialization groups `docker_hosts` / `webservers` (semantics identical to the Proxmox side).
+  - `group_vars/all.yml` — ESXi endpoint (`ESXI_HOSTNAME`), credentials (`ESXI_USERNAME`, `ESXI_PASSWORD`), datastore, network, OVF network label.
+  - `group_vars/esxi_windows_clones.yml` — Windows SSH + PowerShell connection vars (same env vars as Proxmox Windows).
+- **`configure-vm.yml` widened** — the Linux baseline play now targets `proxmox_clones:esxi_clones` and the Windows baseline play now targets `windows_clones:esxi_windows_clones`. Config is hypervisor-agnostic: the same role runs regardless of where the VM lives.
+- **Dependencies** — added `community.vmware ≥ 4.0.0` to `requirements.yml` and `pyvmomi ≥ 8.0.0` to `requirements.txt`. Re-run `scripts/prepare-offline-bundle.sh` to refresh the air-gapped bundle.
+- **`.gitignore`** — adds `ansible/ovf-sources/` (OVF binaries).
 
 ✔ What changed in V3.7.4?
 
@@ -442,5 +457,5 @@ The copyright holder reserves the right to revoke this limited viewing permissio
 
 **Author:** Rémi Rousselot  
 **Project:** VM Lifecycle Toolkit  
-**Version:** V3.7.4  
+**Version:** V3.7.5  
 **Contact:** [remi.rousselot91@gmail.com](mailto:remi.rousselot91@gmail.com)
