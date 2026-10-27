@@ -1,0 +1,87 @@
+---
+# ============================================================
+# webserver — role tasks
+# ============================================================
+# Installs nginx, deploys a demo vhost + index page, enables the
+# service. Illustrates the "specialized role" pattern.
+# ============================================================
+
+- name: Fail fast on unsupported distributions
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution in ['Debian', 'Ubuntu']
+    fail_msg: >-
+      webserver only supports Debian and Ubuntu
+      (got {{ ansible_facts.distribution }}).
+
+- name: Install nginx
+  become: true
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure document root exists
+  become: true
+  ansible.builtin.file:
+    path: "{{ webserver_document_root }}"
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: "0755"
+
+- name: Deploy demo index.html
+  become: true
+  ansible.builtin.template:
+    src: index.html.j2
+    dest: "{{ webserver_document_root }}/index.html"
+    owner: www-data
+    group: www-data
+    mode: "0644"
+
+- name: Deploy vhost configuration
+  become: true
+  ansible.builtin.template:
+    src: vhost.conf.j2
+    dest: "/etc/nginx/sites-available/{{ webserver_site_name }}.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload nginx
+
+- name: Enable vhost
+  become: true
+  ansible.builtin.file:
+    src: "/etc/nginx/sites-available/{{ webserver_site_name }}.conf"
+    dest: "/etc/nginx/sites-enabled/{{ webserver_site_name }}.conf"
+    state: link
+    force: true
+  notify: Reload nginx
+
+- name: Disable the stock 'default' vhost (which also binds :80)
+  become: true
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Reload nginx
+
+- name: Validate nginx configuration
+  become: true
+  ansible.builtin.command: nginx -t
+  register: nginx_validate
+  changed_when: false
+
+- name: Enable and start nginx
+  become: true
+  ansible.builtin.service:
+    name: nginx
+    enabled: true
+    state: started
+
+- name: Report webserver install
+  ansible.builtin.debug:
+    msg: >-
+      webserver complete on {{ inventory_hostname }}:
+      vhost '{{ webserver_site_name }}' listening on
+      :{{ webserver_listen_port }} (server_name {{ webserver_server_name }}).

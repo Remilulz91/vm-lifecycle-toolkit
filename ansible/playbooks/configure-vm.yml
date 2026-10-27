@@ -8,24 +8,39 @@
 # and is reachable over SSH on its target_ip (defined in
 # inventories/proxmox/hosts.yml for each VM).
 #
-# This playbook connects to the VM over SSH, as the user that
-# Packer created in the template (packer_ssh_user, defaults to
-# the common 'packer' / distro login), and applies the base_config
-# role: hostname, timezone, base packages, single 'admin' user
-# with SSH key + passwordless sudo, and SSH hardening.
+# This playbook has three plays:
 #
-# After this playbook runs successfully, the admin user is the
-# intended way to connect — the Packer user can be rotated out
-# later (planned for V3.7.5 decommission).
+#   1. Baseline configuration — applied to every VM in
+#      proxmox_clones (hostname, timezone, base packages,
+#      admin user, SSH hardening).
+#
+#   2. Docker hosts — applied to VMs in the docker_hosts group
+#      (install Docker CE + Compose plugin, admin added to the
+#      docker group).
+#
+#   3. Web servers — applied to VMs in the webservers group
+#      (install nginx + a demo vhost on port 80).
+#
+# A VM only receives the plays whose inventory groups it belongs
+# to. A VM in the webservers group only gets step 1 + step 3,
+# never step 2, etc.
 #
 # Usage (from the ansible/ directory):
 #
+#   # Set the admin SSH public key (required by base_config)
+#   export ADMIN_SSH_PUBLIC_KEY="$(cat ~/.ssh/id_ed25519.pub)"
+#
+#   # Apply everything that matches the inventory
 #   ansible-playbook playbooks/configure-vm.yml
-#   ansible-playbook playbooks/configure-vm.yml --limit debian-example-01
-#   ansible-playbook playbooks/configure-vm.yml \
-#       -e base_config_apt_upgrade=true
+#
+#   # Apply only to one specific host
+#   ansible-playbook playbooks/configure-vm.yml --limit web-01
+#
+#   # Dry run
+#   ansible-playbook playbooks/configure-vm.yml --check --diff
 # ============================================================
 
+# ----- 1. Baseline -----
 - name: Baseline post-clone configuration
   hosts: proxmox_clones
   gather_facts: true
@@ -43,3 +58,21 @@
 
   roles:
     - role: base_config
+
+# ----- 2. Docker hosts -----
+- name: Configure Docker hosts
+  hosts: docker_hosts
+  gather_facts: true
+  become: false
+
+  roles:
+    - role: docker_host
+
+# ----- 3. Web servers -----
+- name: Configure web servers
+  hosts: webservers
+  gather_facts: true
+  become: false
+
+  roles:
+    - role: webserver

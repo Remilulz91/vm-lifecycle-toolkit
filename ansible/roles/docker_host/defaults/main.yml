@@ -1,0 +1,22 @@
+---
+# ============================================================
+# docker_host — default variables
+# ============================================================
+
+# Which user to add to the 'docker' group (so they can run `docker`
+# without sudo). Defaults to the admin user created by base_config.
+docker_host_users:
+  - "{{ base_config_admin_user | default('admin') }}"
+
+# Enable + start the docker service after install.
+docker_host_service_enabled: true
+docker_host_service_state: started
+
+# Docker apt packages installed from the official Docker repository.
+# Keep this list in sync with Docker's documented set.
+docker_host_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin

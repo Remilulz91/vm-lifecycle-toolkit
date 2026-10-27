@@ -1,7 +1,7 @@
 # 🧱 VM Lifecycle Toolkit — Build & Deploy VMs on Proxmox and ESXi
 
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v3.7.2-blue.svg)](README.md)
+[![Version](https://img.shields.io/badge/version-v3.7.3-blue.svg)](README.md)
 [![Packer](https://img.shields.io/badge/Packer-%E2%89%A51.11.0-blueviolet.svg)](https://www.packer.io/)
 [![Hypervisors](https://img.shields.io/badge/Hypervisors-Proxmox%20%7C%20ESXi-orange.svg)](README.md)
 [![OSes](https://img.shields.io/badge/OSes-Debian%20%7C%20Ubuntu%20%7C%20Windows%2011-green.svg)](README.md)
@@ -123,7 +123,9 @@ vm-lifecycle-toolkit/
 │  │  └─ configure-vm.yml                       ← V3.7.2: step 2 baseline config over SSH
 │  ├─ roles/
 │  │  ├─ proxmox_clone/                         (role: clone + optional SSH wait)
-│  │  └─ base_config/                           ← V3.7.2: hostname, tz, admin user, SSH hardening
+│  │  ├─ base_config/                           ← V3.7.2: hostname, tz, admin user, SSH hardening
+│  │  ├─ docker_host/                           ← V3.7.3: Docker CE + Compose plugin
+│  │  └─ webserver/                             ← V3.7.3: nginx + demo vhost
 │  ├─ scripts/                                  ← V3.7.1: Air-gapped bundle helpers
 │  │  ├─ prepare-offline-bundle.sh              (online host: pack collections + wheels)
 │  │  └─ install-offline-bundle.sh              (offline host: install from local bundle)
@@ -133,6 +135,16 @@ vm-lifecycle-toolkit/
 ├─ LICENSE
 └─ README.md
 ```
+
+✔ What changed in V3.7.3?
+
+- **Two specialized roles chained after `base_config`** on top of the existing `configure-vm.yml` playbook:
+  - **`docker_host`** — installs Docker CE + Compose plugin from Docker's official apt repository (GPG key under `/etc/apt/keyrings/`, repo auto-detected from `distribution` and `distribution_release`), adds the admin user to the `docker` group, enables and starts `docker.service`. Smoke-tested with `docker --version`.
+  - **`webserver`** — installs nginx, templates a demo vhost on port 80 and a hostname-aware `index.html`, disables the stock `default` vhost, validates with `nginx -t`, reloads via handler.
+- **Group-based chaining** in `configure-vm.yml`: the playbook now has 3 plays — baseline (`proxmox_clones`), docker (`docker_hosts`), webserver (`webservers`). A VM only receives the plays whose inventory groups it belongs to.
+- `hosts.yml` extended with the two specialization groups + commented examples (docker-host-01, web-01).
+- Both specialized roles **fail fast** on non-Debian/Ubuntu guests (planned to extend once Windows baseline lands in V3.7.4).
+- Note on offline sites: these two roles reach `download.docker.com` / the distro apt repo. Mirroring Docker to your internal apt mirror remains the user's infrastructure concern — out of scope for V3.7.3.
 
 ✔ What changed in V3.7.2?
 
@@ -420,5 +432,5 @@ The copyright holder reserves the right to revoke this limited viewing permissio
 
 **Author:** Rémi Rousselot  
 **Project:** VM Lifecycle Toolkit  
-**Version:** V3.7.2  
+**Version:** V3.7.3  
 **Contact:** [remi.rousselot91@gmail.com](mailto:remi.rousselot91@gmail.com)

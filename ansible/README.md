@@ -25,10 +25,22 @@ ansible/
 │   │   ├── defaults/main.yml
 │   │   ├── tasks/main.yml
 │   │   └── README.md
-│   └── base_config/                     # Role: hostname, tz, admin user, SSH hardening
+│   ├── base_config/                     # Role: hostname, tz, admin user, SSH hardening
+│   │   ├── defaults/main.yml
+│   │   ├── handlers/main.yml
+│   │   ├── tasks/main.yml
+│   │   └── README.md
+│   ├── docker_host/                     # V3.7.3: Install Docker CE + Compose plugin
+│   │   ├── defaults/main.yml
+│   │   ├── handlers/main.yml
+│   │   ├── tasks/main.yml
+│   │   └── README.md
+│   └── webserver/                       # V3.7.3: Install nginx + demo vhost
 │       ├── defaults/main.yml
 │       ├── handlers/main.yml
 │       ├── tasks/main.yml
+│       ├── templates/vhost.conf.j2
+│       ├── templates/index.html.j2
 │       └── README.md
 ├── scripts/
 │   ├── prepare-offline-bundle.sh        # (online host) build an air-gapped bundle
@@ -159,6 +171,38 @@ ansible-playbook playbooks/configure-vm.yml --limit my-new-debian
 
 After the playbook runs, SSH as the new admin: `ssh admin@<target_ip>`. Password authentication and root login are disabled.
 
+### 5. Apply specialized roles (V3.7.3+)
+
+List your VMs in the specialization groups of `inventories/proxmox/hosts.yml` to layer app-specific roles on top of `base_config`:
+
+```yaml
+all:
+  children:
+    proxmox_clones:
+      hosts:
+        docker-host-01:
+          source_template_vmid: 1001
+          target_vmid: 2010
+          target_name: "docker-host-01"
+          target_ip: "192.168.1.210"
+        web-01:
+          source_template_vmid: 1002
+          target_vmid: 2020
+          target_name: "web-01"
+          target_ip: "192.168.1.220"
+    docker_hosts:
+      hosts:
+        docker-host-01:
+    webservers:
+      hosts:
+        web-01:
+```
+
+Then rerun `configure-vm.yml`. Each VM gets `base_config` first, then any specialization play whose group it belongs to:
+
+- `docker_hosts`: installs Docker CE + Compose plugin, adds `admin` to the `docker` group. See [roles/docker_host/README.md](roles/docker_host/README.md).
+- `webservers`: installs nginx and deploys a demo vhost on port 80. See [roles/webserver/README.md](roles/webserver/README.md).
+
 ## 📦 Offline / Air-Gapped setup
 
 The entire VM Lifecycle Toolkit is designed to also run in an **air-gapped internal network** with no internet access. The Packer side already supports this (plugin cache — see top-level [BUILD.md](../BUILD.md)). The Ansible side has the same workflow via two helper scripts in `ansible/scripts/`.
@@ -235,11 +279,12 @@ Make sure to override the `proxmox_api_token_secret` lookup in `group_vars/all.y
 
 - **V3.7**             — Clone VMs from Packer templates (minimal, Proxmox only)
 - **V3.7.1**           — Offline / air-gapped bundle scripts for Ansible deps
-- **V3.7.2 (current)** — Baseline post-clone role `base_config` + `configure-vm.yml` playbook (Debian/Ubuntu)
-- **V3.7.3 (planned)** — Specialized roles (`docker_host`, `webserver`, …) + Windows `base_config_windows`
-- **V3.7.4 (planned)** — ESXi support (OVF deploy via `community.vmware` modules)
-- **V3.7.5 (planned)** — Dynamic inventory (query Proxmox for existing VMs)
-- **V3.7.6 (planned)** — Decommission playbook (clean VM teardown)
+- **V3.7.2**           — Baseline post-clone role `base_config` + `configure-vm.yml` playbook (Debian/Ubuntu)
+- **V3.7.3 (current)** — Specialized roles: `docker_host` + `webserver` (nginx), chained via inventory groups
+- **V3.7.4 (planned)** — Windows baseline (`base_config_windows`)
+- **V3.7.5 (planned)** — ESXi support (OVF deploy via `community.vmware` modules)
+- **V3.7.6 (planned)** — Dynamic inventory (query Proxmox for existing VMs)
+- **V3.7.7 (planned)** — Decommission playbook (clean VM teardown)
 
 ## 📜 License
 

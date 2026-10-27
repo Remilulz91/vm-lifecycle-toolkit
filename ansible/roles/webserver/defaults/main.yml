@@ -1,0 +1,15 @@
+---
+# ============================================================
+# webserver — default variables
+# ============================================================
+
+# Primary vhost settings for the demo site.
+webserver_site_name: "default-site"
+webserver_server_name: "{{ inventory_hostname }}"
+webserver_listen_port: 80
+webserver_document_root: "/var/www/{{ webserver_site_name }}"
+
+# A short landing-page text shown by the demo index.html.
+webserver_welcome_message: >-
+  Hello from {{ inventory_hostname }} — this nginx vhost was deployed
+  by the VM Lifecycle Toolkit (role: webserver).
