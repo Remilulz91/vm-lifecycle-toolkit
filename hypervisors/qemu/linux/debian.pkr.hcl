@@ -25,8 +25,11 @@ source "qemu" "debian" {
   net_device     = var.net_device
 
   # --- QEMU process settings ---
-  accelerator = var.qemu_accelerator
-  headless    = var.qemu_headless
+  accelerator       = var.qemu_accelerator
+  headless          = var.qemu_headless
+  vnc_bind_address  = var.qemu_vnc_bind_address
+  vnc_port_min      = var.qemu_vnc_port_min
+  vnc_port_max      = var.qemu_vnc_port_max
 
   # --- ISO ---
   iso_url      = var.iso_url
@@ -51,18 +54,29 @@ source "qemu" "debian" {
     "/debs/${replace(f, "%3a", "_")}.b64" => filebase64("${path.root}/../../proxmox/linux/offline/debian/debs/${f}")
   })
 
-  # --- Automated boot sequence for Debian netinst ---
+  # --- Automated boot sequence for Debian ---
+  # Match the shape of the known-working Gemini test setup:
+  #   1. Esc → boot: prompt
+  #   2. explicit "install" label (safer than defaulting via Enter)
+  #   3. preseed/url FIRST so the installer knows where to fetch early
+  #   4. language=en country=FR locale=en_US.UTF-8 to bypass the "Select a
+  #      country" screen that otherwise hangs headless installs
+  #   5. keyboard-configuration/xkb-keymap=us for the install phase
+  #      (fr is enforced inside the preseed for the FINAL system)
+  #   6. fb=false + debconf/frontend=noninteractive for safety
   boot_wait = "15s"
   boot_command = [
     "<esc><wait>",
-    "auto priority=critical ",
-    "locale=en_US.UTF-8 debian-installer=en_US ",
-    "kbd-chooser/method=fr keyboard-configuration/xkb-keymap=fr ",
-    "netcfg/choose_interface=auto ",
-    "netcfg/disable_dhcp=false ",
-    "ip=dhcp ",
-    "netcfg/get_hostname=${var.template_name} ",
+    "install ",
     "url=http://{{ .HTTPIP }}:{{ .HTTPPort }}/preseed.cfg ",
+    "auto=true priority=critical ",
+    "language=en country=FR locale=en_US.UTF-8 ",
+    "keyboard-configuration/xkb-keymap=us ",
+    "netcfg/choose_interface=auto ",
+    "netcfg/get_hostname=${var.template_name} ",
+    "netcfg/get_domain=local ",
+    "fb=false ",
+    "debconf/frontend=noninteractive ",
     "<enter>"
   ]
 
@@ -74,9 +88,8 @@ source "qemu" "debian" {
   ssh_timeout  = "60m"
 
   # --- Graceful shutdown ---
-  # Debian preseed leaves the root account enabled with the temporary
-  # password, so we can SSH-exec the shutdown.
-  shutdown_command = "echo '${var.root_password}' | sudo -S shutdown -P now"
+  # Packer connects as root (preseed enables it temporarily), so no sudo needed.
+  shutdown_command = "shutdown -P now"
   shutdown_timeout = "10m"
 }
 

@@ -132,7 +132,7 @@ vm-lifecycle-toolkit/
 │     │      ├─ medium.pkrvars.hcl
 │     │      ├─ hard.pkrvars.hcl
 │     │      └─ extreme.pkrvars.hcl
-│     └─ README.md
+│     └─ (build instructions live in top-level BUILD.md — step 5ter)
 │
 ├─ ansible/                                     ← V3.7: Clone VMs from Packer templates (Proxmox-first)
 │  ├─ ansible.cfg                               (Ansible config)
@@ -172,7 +172,7 @@ vm-lifecycle-toolkit/
 - **Covers Debian 13 and Ubuntu 26.04 Server** via the same preseed / autoinstall paths as the Proxmox side — same locale, keyboard, timezone, partitioning scheme, SSH hardening. Headless by default (QEMU window off); flip `qemu_headless=false` to watch the install.
 - **QEMU-specific site vars** (`profiles/site/qemu.pkrvars.hcl`): accelerator (`kvm` / `tcg`), headless flag, disk / NIC devices (`virtio-scsi`, `virtio-net`), optional explicit output directory. OS profiles use `iso_url` + `iso_checksum` instead of a Proxmox storage pool reference — both `file:///…` and `https://` URLs are supported.
 - **Offline `.deb` cache shared with the Proxmox track** — rather than duplicating `qemu-guest-agent` packages, the QEMU `.pkr.hcl` files reference `../../proxmox/linux/offline/{debian,ubuntu}/debs/`. One set of files feeds both hypervisors.
-- **`hypervisors/qemu/README.md`** documents prerequisites (`qemu-system-x86`, `ovmf`, `/dev/kvm` perms, Cockpit install), the Packer build, and the `virt-install --import` import step end-to-end.
+- **Build instructions live in `BUILD.md`** (Step 5ter) alongside the Proxmox and ESXi flows, same format: prerequisites (`qemu-system-x86`, `ovmf`, `/dev/kvm` perms, Cockpit install), `packer init`, Debian and Ubuntu builds, then the `virt-install --import` step.
 - **Linux only in this release** — Windows 11 on QEMU needs TPM 2.0 (swtpm) + OVMF + Secure Boot keys and is deferred to V3.8.1+.
 
 ✔ What changed in V3.7.7?

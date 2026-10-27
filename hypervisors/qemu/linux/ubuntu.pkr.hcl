@@ -22,8 +22,11 @@ source "qemu" "ubuntu" {
   net_device     = var.net_device
 
   # --- QEMU process settings ---
-  accelerator = var.qemu_accelerator
-  headless    = var.qemu_headless
+  accelerator       = var.qemu_accelerator
+  headless          = var.qemu_headless
+  vnc_bind_address  = var.qemu_vnc_bind_address
+  vnc_port_min      = var.qemu_vnc_port_min
+  vnc_port_max      = var.qemu_vnc_port_max
 
   # --- ISO ---
   iso_url      = var.iso_url
@@ -49,6 +52,9 @@ source "qemu" "ubuntu" {
   })
 
   # --- Automated boot sequence for Ubuntu autoinstall ---
+  # The autoinstall ds=nocloud-net snippet points Subiquity at Packer's HTTP
+  # server for user-data + meta-data. GRUB's `e` key opens the kernel-line
+  # editor; we move to the end of the linux line and append the ds= value.
   boot_wait = "15s"
   boot_command = [
     "<esc><wait>",
@@ -65,7 +71,8 @@ source "qemu" "ubuntu" {
   ssh_timeout  = "60m"
 
   # --- Graceful shutdown ---
-  shutdown_command = "echo '${var.root_password}' | sudo -S shutdown -P now"
+  # Packer connects as root (user-data enables it temporarily), so no sudo needed.
+  shutdown_command = "shutdown -P now"
   shutdown_timeout = "10m"
 }
 

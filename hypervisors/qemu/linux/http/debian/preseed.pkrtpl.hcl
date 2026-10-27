@@ -75,15 +75,21 @@ d-i grub-installer/with_other_os boolean true
 ### --- Finish installation ---
 d-i finish-install/reboot_in_progress note
 
-### --- Late command (post-install, with logging & stamp file) ---
+### --- Late command (post-install) ---
+# Robust to an empty offline/debs set (QEMU builds often don't need the extra
+# .deb cache): we install from debs ONLY IF the manifest has entries, and we
+# ALWAYS re-run the SSH-config edits afterwards (both halves are chained
+# with ';', not '&&', so a failure in the deb step doesn't skip SSH setup —
+# otherwise Packer can't SSH as root and the whole build times out).
 d-i preseed/late_command string \
-  HTTP_BASE=$(tr ' ' '\n' < /proc/cmdline | grep '^url=' | sed 's|^url=||; s|/preseed\.cfg$||') && \
-  mkdir -p /target/tmp/debs && \
-  wget -q -O /tmp/manifest.txt "$${HTTP_BASE}/debs/manifest.txt" && \
-  while IFS= read -r deb || [ -n "$deb" ]; do \
-    [ -n "$deb" ] && wget -q -O- "$${HTTP_BASE}/debs/$${deb}.b64" | base64 -d > "/target/tmp/debs/$${deb}" ; \
-  done < /tmp/manifest.txt && \
-  in-target sh -c 'dpkg -i /tmp/debs/*.deb' && \
+  HTTP_BASE=$(tr ' ' '\n' < /proc/cmdline | grep '^url=' | sed 's|^url=||; s|/preseed\.cfg$||'); \
+  if [ -n "$${HTTP_BASE}" ] && wget -q -O /tmp/manifest.txt "$${HTTP_BASE}/debs/manifest.txt" && [ -s /tmp/manifest.txt ]; then \
+    mkdir -p /target/tmp/debs; \
+    while IFS= read -r deb || [ -n "$deb" ]; do \
+      [ -n "$deb" ] && wget -q -O- "$${HTTP_BASE}/debs/$${deb}.b64" | base64 -d > "/target/tmp/debs/$${deb}" ; \
+    done < /tmp/manifest.txt; \
+    in-target sh -c 'dpkg -i /tmp/debs/*.deb || true'; \
+  fi; \
   in-target sh -c "set -eux; \
     sed -i 's/^#\\?PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config; \
     sed -i 's/^#\\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config; \

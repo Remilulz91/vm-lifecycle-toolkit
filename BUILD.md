@@ -323,7 +323,12 @@ Note:
 - OS (Debian / Ubuntu / Windows) : `hypervisors/esxi/profiles/os/*.pkrvars.hcl`
 - Flavor (hardware preset) : `hypervisors/esxi/profiles/flavors/*.pkrvars.hcl`
 
-The Proxmox and ESXi flavor files are identical in structure (`cpus`, `sockets`, `memory`, `disk_gb`) so you can copy your tested hardware presets across hypervisors without changes.
+**QEMU/KVM:**
+- Site (local build settings — accelerator, headless, output dir) : `hypervisors/qemu/profiles/site/qemu.pkrvars.hcl`
+- OS (Debian / Ubuntu — `iso_url` + `iso_checksum`) : `hypervisors/qemu/profiles/os/*.pkrvars.hcl`
+- Flavor (hardware preset) : `hypervisors/qemu/profiles/flavors/*.pkrvars.hcl`
+
+The three hypervisors share the same flavor file schema (`cpus`, `sockets`, `memory`, `disk_gb`) so you can copy tested hardware presets across them without changes.
 
 ## 🧠 Step 4 — Required Build Variables
 
@@ -354,6 +359,18 @@ All account variables must be passed at build time (none stored in files):
 | `user_password`    | Standard user password                           | ✅         |
 
 Note for ESXi: there is no `template_id` (vSphere identifies VMs by name, not VMID).
+
+**QEMU/KVM builds:**
+
+| Variable           | Description                                            | Required   |
+| ------------------ | ------------------------------------------------------ | ---------- |
+| `template_name`    | Hostname / `.qcow2` filename (`<template_name>.qcow2`) | ✅         |
+| `root_password`    | Temporary root password (Linux only)                   | ✅ (Linux) |
+| `root_ssh_pubkey`  | SSH key to inject into root (Linux)                    | ✅ (Linux) |
+| `user_username`    | Standard user name                                     | ✅         |
+| `user_password`    | Standard user password                                 | ✅         |
+
+Note for QEMU/KVM: no remote hypervisor credentials — the build runs locally on the Packer host. The ISO location + checksum come from the OS profile (`iso_url` + `iso_checksum`), not from `-var`.
 
 ## 🧾 Step 5 — Validate and Build (Proxmox)
 
@@ -565,5 +582,156 @@ PACKER_LOG=1 packer build \
 ==> debian.vsphere-iso.debian: Clearing boot order...
 --> debian.vsphere-iso.debian: tpl-debian13-ci
 ```
+
+---
+
+## 🧾 Step 5ter — Validate and Build (QEMU/KVM)
+
+The QEMU/KVM track builds **locally** on the host that runs Packer (no remote hypervisor). The artefact is a `.qcow2` file you later import into libvirt with `virt-install --import` — administrable visually through Cockpit (`cockpit-machines`).
+
+### 5ter.0 Prerequisites on the Packer host
+
+The host that runs Packer **is** the KVM host.
+
+```bash
+# Core bits
+sudo apt install packer qemu-system-x86 qemu-utils ovmf
+
+# Enable /dev/kvm access for your user
+sudo adduser "$USER" kvm
+sudo adduser "$USER" libvirt   # for virt-install later
+# → log out / back in to pick up the new groups
+```
+
+Check KVM is really available:
+
+```bash
+ls -l /dev/kvm                                     # exists, rw for the kvm group
+which qemu-system-x86_64                           # not empty
+egrep -c '(vmx|svm)' /proc/cpuinfo                 # non-zero
+```
+
+For visual administration via Cockpit:
+
+```bash
+sudo apt install cockpit cockpit-machines libvirt-daemon-system virtinst
+sudo systemctl enable --now cockpit.socket
+# → http://<host>:9090
+```
+
+### 5ter.1 Download the installer ISO
+
+Download the ISO once into a cache the Packer host can read, then update the matching OS profile with its SHA-256:
+
+```bash
+sudo mkdir -p /var/cache/isos
+sudo curl -L \
+  https://cdimage.debian.org/debian-cd/current/amd64/iso-dvd/debian-13.5.0-amd64-DVD-1.iso \
+  -o /var/cache/isos/debian-13.5.0-amd64-DVD-1.iso
+
+sha256sum /var/cache/isos/debian-13.5.0-amd64-DVD-1.iso
+# → paste the hash into hypervisors/qemu/profiles/os/debian_13.pkrvars.hcl (iso_checksum)
+```
+
+Same shape for Ubuntu Server 26.04 (`iso_url` + `iso_checksum` in `profiles/os/ubuntu_26_04_server.pkrvars.hcl`).
+
+### 5ter.2 Initialize Packer plugins
+
+```bash
+cd hypervisors/qemu/linux
+packer init .
+```
+
+### 5ter.3 Validate and Build Debian 13 (QEMU)
+
+```bash
+PACKER_LOG=1 packer build \
+  -only="debian.*" \
+  -var-file=../profiles/site/qemu.pkrvars.hcl \
+  -var-file=../profiles/os/debian_13.pkrvars.hcl \
+  -var-file=../profiles/flavors/medium.pkrvars.hcl \
+  -var "template_name=tpl-debian13-qemu" \
+  -var "root_password=TempRoot123" \
+  -var "root_ssh_pubkey=$(cat ~/.ssh/id_ed25519.pub)" \
+  -var "user_username=user" \
+  -var "user_password=user" \
+  .
+```
+
+Artefact: `hypervisors/qemu/linux/output-tpl-debian13-qemu/tpl-debian13-qemu.qcow2`.
+
+### 5ter.4 Validate and Build Ubuntu 26.04 Server (QEMU)
+
+```bash
+PACKER_LOG=1 packer build \
+  -only="ubuntu.*" \
+  -var-file=../profiles/site/qemu.pkrvars.hcl \
+  -var-file=../profiles/os/ubuntu_26_04_server.pkrvars.hcl \
+  -var-file=../profiles/flavors/medium.pkrvars.hcl \
+  -var "template_name=tpl-ubuntu2604-qemu" \
+  -var "root_password=TempRoot123" \
+  -var "root_ssh_pubkey=$(cat ~/.ssh/id_ed25519.pub)" \
+  -var "user_username=user" \
+  -var "user_password=user" \
+  .
+```
+
+📜 Notes:
+- Headless by default. To watch the install happen, add `-var "qemu_headless=false"` or connect via VNC — Packer prints the VNC port in its logs.
+- `template_name` is used both as the Linux hostname during install and as the `.qcow2` filename.
+- Windows 11 on QEMU is not yet supported (needs TPM 2.0 via `swtpm`, OVMF, Secure Boot keys — planned for V3.8.1).
+
+### 5ter.5 Import the `.qcow2` into libvirt / Cockpit
+
+Once Packer is done, register the image as a VM and start it. It appears immediately in Cockpit → Virtual Machines.
+
+```bash
+# Move the image into a libvirt storage pool
+sudo cp output-tpl-debian13-qemu/tpl-debian13-qemu.qcow2 /var/lib/libvirt/images/
+sudo chown libvirt-qemu:libvirt-qemu /var/lib/libvirt/images/tpl-debian13-qemu.qcow2
+
+# --import = reuse an existing disk, no OS install
+sudo virt-install \
+  --name tpl-debian13-qemu \
+  --memory 4096 --vcpus 2 \
+  --disk path=/var/lib/libvirt/images/tpl-debian13-qemu.qcow2,format=qcow2 \
+  --os-variant debian13 \
+  --network network=default,model=virtio \
+  --import \
+  --noautoconsole
+```
+
+**Example output (QEMU):**
+
+```yaml
+==> debian.qemu.debian: Waiting for SSH to become available...
+==> debian.qemu.debian: Connected to SSH!
+==> debian.qemu.debian: Provisioning with shell script...
+==> debian.qemu.debian: Gracefully halting virtual machine...
+--> debian.qemu.debian: output-tpl-debian13-qemu/tpl-debian13-qemu.qcow2
+```
+
+### 5ter.6 Troubleshooting (QEMU-specific)
+
+- **`exec: "qemu-system-x86_64": executable file not found in $PATH`** — the Packer host doesn't have QEMU installed. Fix: `sudo apt install qemu-system-x86 qemu-utils ovmf` (see 5ter.0).
+- **`Could not access KVM kernel module: Permission denied`** — the user doesn't have access to `/dev/kvm`. Fix: `sudo adduser "$USER" kvm` and log out / back in. Verify with `ls -l /dev/kvm`.
+- **`Undefined -var variable` on `template_name` / `root_password` / …** — Packer was given a single `.pkr.hcl` file and ignored `variables.pkr.hcl`. **Always pass `.` (the directory) at the end of the command, not a specific file**, and scope with `-only="<build>.*"`. The commands in 5ter.3 and 5ter.4 already do this.
+- **`Timeout waiting for SSH`, no output in headless mode** — the Debian installer is stuck on an interactive screen you can't see. The project's `boot_command` already injects `language=en country=FR locale=en_US.UTF-8` + `fb=false` + `debconf/frontend=noninteractive` and the `late_command` is written to tolerate an empty offline debs set, but if you've tweaked anything, re-check. **Visual diagnosis via VNC** (the only reliable way to see the install screen on a remote Packer host):
+
+  ```bash
+  # Option A — SSH tunnel (safest, nothing exposed on the network)
+  # On your workstation:
+  ssh -L 5900:127.0.0.1:5900 user@packer-host
+  # In another terminal, launch the build on the Packer host. Packer picks the
+  # pinned port 5900 (set in profiles/site/qemu.pkrvars.hcl).
+  # Then open vnc://localhost:5900 on your workstation (TigerVNC / Remmina / VNC Viewer).
+
+  # Option B — expose VNC on the Packer host network (less safe, LAN only)
+  # Edit profiles/site/qemu.pkrvars.hcl: qemu_vnc_bind_address = "0.0.0.0"
+  # Open your firewall for port 5900 if needed, then VNC to <packer-host>:5900.
+  ```
+
+  Once connected, you'll see exactly what the installer is doing — a frozen dialog, a disk error, a package-select screen, etc.
+- **ISO filename vs profile** — the OS profiles under `hypervisors/qemu/profiles/os/` reference the **DVD-1** ISO (offline-capable: all packages live on the DVD). If you downloaded `netinst` instead, the install will try to reach `deb.debian.org` and may fail on an offline host. Stick to DVD-1 for consistency with the Proxmox / ESXi tracks.
 
 ---

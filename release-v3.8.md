@@ -21,13 +21,14 @@ hypervisors/qemu/
 │   └── http/
 │       ├── debian/preseed.pkrtpl.hcl
 │       └── ubuntu/user-data.pkrtpl.hcl
-├── profiles/
-│   ├── site/qemu.pkrvars.hcl        # accelerator, headless, interfaces, output dir
-│   ├── os/debian_13.pkrvars.hcl
-│   ├── os/ubuntu_26_04_server.pkrvars.hcl
-│   └── flavors/{light,medium,hard,extreme}.pkrvars.hcl
-└── README.md                        # Prereqs + build + virt-install import flow
+└── profiles/
+    ├── site/qemu.pkrvars.hcl        # accelerator, headless, interfaces, output dir
+    ├── os/debian_13.pkrvars.hcl
+    ├── os/ubuntu_26_04_server.pkrvars.hcl
+    └── flavors/{light,medium,hard,extreme}.pkrvars.hcl
 ```
+
+Build instructions are in the top-level `BUILD.md` (Step 5ter — same format as Proxmox / ESXi), not in a per-hypervisor README.
 
 ## Design notes
 
@@ -39,9 +40,11 @@ hypervisors/qemu/
 ## Typical workflow
 
 ```bash
-cd hypervisors/qemu/linux
+# Prereqs on the Packer host (one-off)
+sudo apt install packer qemu-system-x86 qemu-utils ovmf
+sudo adduser "$USER" kvm   # log out / back in
 
-# Install the plugin (one-off)
+cd hypervisors/qemu/linux
 packer init .
 
 # Grab the ISO once, update profiles/os/debian_13.pkrvars.hcl with its SHA-256
@@ -50,25 +53,27 @@ sudo curl -L \
   https://cdimage.debian.org/debian-cd/current/amd64/iso-dvd/debian-13.5.0-amd64-DVD-1.iso \
   -o /var/cache/isos/debian-13.5.0-amd64-DVD-1.iso
 
-# Build
-packer build \
+# Build — matches the Proxmox / ESXi call shape: give Packer the directory (".")
+# and scope to one OS with -only=<build>.*
+PACKER_LOG=1 packer build \
+  -only="debian.*" \
   -var-file=../profiles/site/qemu.pkrvars.hcl \
   -var-file=../profiles/os/debian_13.pkrvars.hcl \
   -var-file=../profiles/flavors/medium.pkrvars.hcl \
-  -var "template_name=debian-13-qemu" \
-  -var "root_password=TempPass123!" \
+  -var "template_name=tpl-debian13-qemu" \
+  -var "root_password=TempRoot123" \
   -var "root_ssh_pubkey=$(cat ~/.ssh/id_ed25519.pub)" \
-  -var "user_username=operator" \
-  -var "user_password=TempPass123!" \
-  debian.pkr.hcl
+  -var "user_username=user" \
+  -var "user_password=user" \
+  .
 
 # Import into libvirt (visible in Cockpit → Virtual Machines immediately)
-sudo cp output-debian-13-qemu/debian-13-qemu.qcow2 /var/lib/libvirt/images/
-sudo chown libvirt-qemu:libvirt-qemu /var/lib/libvirt/images/debian-13-qemu.qcow2
+sudo cp output-tpl-debian13-qemu/tpl-debian13-qemu.qcow2 /var/lib/libvirt/images/
+sudo chown libvirt-qemu:libvirt-qemu /var/lib/libvirt/images/tpl-debian13-qemu.qcow2
 
 sudo virt-install \
-  --name debian-13-qemu --memory 4096 --vcpus 2 \
-  --disk path=/var/lib/libvirt/images/debian-13-qemu.qcow2,format=qcow2 \
+  --name tpl-debian13-qemu --memory 4096 --vcpus 2 \
+  --disk path=/var/lib/libvirt/images/tpl-debian13-qemu.qcow2,format=qcow2 \
   --os-variant debian13 --network network=default,model=virtio \
   --import --noautoconsole
 ```

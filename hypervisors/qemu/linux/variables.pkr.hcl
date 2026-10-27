@@ -103,6 +103,25 @@ variable "qemu_headless" {
   default = true
 }
 
+# VNC bind address. Default 127.0.0.1 (loopback only, safe).
+# Set to "0.0.0.0" to make the VNC port reachable from your workstation —
+# useful for debugging when the install hangs headless. Combine with a
+# fixed port range (qemu_vnc_port_min/max) so firewall rules are predictable.
+variable "qemu_vnc_bind_address" {
+  type    = string
+  default = "127.0.0.1"
+}
+
+variable "qemu_vnc_port_min" {
+  type    = number
+  default = 5900
+}
+
+variable "qemu_vnc_port_max" {
+  type    = number
+  default = 5950
+}
+
 # Disk interface presented to the guest. virtio-scsi matches the
 # Proxmox side; libvirt happily consumes the resulting qcow2 either way.
 variable "disk_interface" {
