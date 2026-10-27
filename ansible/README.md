@@ -15,11 +15,13 @@ ansible/
 ├── inventories/
 │   ├── proxmox/
 │   │   ├── hosts.yml                    # Static list of VMs to clone on Proxmox
+│   │   ├── proxmox.yml                  ← V3.7.6: Dynamic inventory (live VM list)
 │   │   └── group_vars/
 │   │       ├── all.yml                  # Proxmox endpoint, user, timeouts, SSH
 │   │       └── windows_clones.yml       # Windows SSH + PowerShell vars
 │   └── esxi/                            ← V3.7.5: Standalone ESXi deploy
 │       ├── hosts.yml                    # Static list of VMs to deploy on ESXi
+│       ├── esxi.yml                     ← V3.7.6: Dynamic inventory (live VM list)
 │       └── group_vars/
 │           ├── all.yml                  # ESXi endpoint, datastore, network
 │           └── esxi_windows_clones.yml  # Windows SSH + PowerShell vars
@@ -276,6 +278,37 @@ The configure playbook stays the same — `base_config` and `base_config_windows
 
 The directory `ansible/ovf-sources/` is `.gitignore`'d — never commit OVF binaries.
 
+### 8. Dynamic inventory (V3.7.6+)
+
+Static `hosts.yml` is right for *provisioning* (listing VMs you want to clone/deploy). For *operating* on VMs that already exist, there are now two dynamic-inventory plugin configs that query the hypervisors directly:
+
+- `inventories/proxmox/proxmox.yml` → `community.proxmox.proxmox` plugin
+- `inventories/esxi/esxi.yml`       → `community.vmware.vmware_vm_inventory` plugin
+
+Both files live **next to** `hosts.yml`. Ansible merges every inventory source in a directory, so pointing `-i` at the directory gives you the union: static entries (planned clones/deploys) + live VMs returned by the plugin.
+
+```bash
+# See what's live right now
+ansible-inventory -i inventories/proxmox/ --graph
+ansible-inventory -i inventories/esxi/    --graph
+
+# Ad-hoc ping on every running Proxmox VM the token can see
+ansible -i inventories/proxmox/ proxmox_running -m ansible.builtin.ping
+
+# Re-apply the baseline to one specific live VM (no need to edit hosts.yml)
+ansible-playbook -i inventories/proxmox/ playbooks/configure-vm.yml \
+    --limit some-existing-vm
+```
+
+**Automatic groupings**:
+- Proxmox tags become Ansible groups. Tag a VM `docker_hosts` in Proxmox → it feeds into the Docker specialization play without any inventory edit.
+- Proxmox adds `proxmox_running` / `proxmox_stopped`, and a `node_<nodename>` group per hypervisor node.
+- ESXi adds `esxi_power_poweredOn` / `esxi_power_poweredOff` and a `esxi_guest_os_*` group per guest-OS family.
+
+**Credentials** reuse the same env vars as the clone/deploy flow (`PROXMOX_API_TOKEN_SECRET`, `ESXI_PASSWORD`). No new secrets.
+
+**Caching**: `ansible.cfg` enables the JSONFile cache (5-minute TTL) under `./.inventory-cache/` (gitignored) — so repeated `ansible-inventory`/`ansible-playbook` runs don't hammer the hypervisor API. Clear it manually with `rm -rf .inventory-cache/` if you need a fresh fetch.
+
 ## 📦 Offline / Air-Gapped setup
 
 The entire VM Lifecycle Toolkit is designed to also run in an **air-gapped internal network** with no internet access. The Packer side already supports this (plugin cache — see top-level [BUILD.md](../BUILD.md)). The Ansible side has the same workflow via two helper scripts in `ansible/scripts/`.
@@ -355,8 +388,8 @@ Make sure to override the `proxmox_api_token_secret` lookup in `group_vars/all.y
 - **V3.7.2**           — Baseline post-clone role `base_config` + `configure-vm.yml` playbook (Debian/Ubuntu)
 - **V3.7.3**           — Specialized roles: `docker_host` + `webserver` (nginx), chained via inventory groups
 - **V3.7.4**           — Windows baseline role `base_config_windows` + `windows_clones` inventory group
-- **V3.7.5 (current)** — Standalone ESXi deploy via OVF (`esxi_deploy` role + `inventories/esxi/` + `deploy-from-ovf.yml`)
-- **V3.7.6 (planned)** — Dynamic inventory (query Proxmox / ESXi for existing VMs)
+- **V3.7.5**           — Standalone ESXi deploy via OVF (`esxi_deploy` role + `inventories/esxi/` + `deploy-from-ovf.yml`)
+- **V3.7.6 (current)** — Dynamic inventory for Proxmox + ESXi (`inventories/*/proxmox.yml` and `esxi.yml`), inventory cache
 - **V3.7.7 (planned)** — Decommission playbook (clean VM teardown)
 
 ## 📜 License

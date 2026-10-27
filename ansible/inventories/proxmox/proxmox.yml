@@ -1,0 +1,67 @@
+---
+# ============================================================
+# Dynamic inventory — Proxmox (V3.7.6+)
+# ============================================================
+#
+# Queries the Proxmox API and lists every VM & container the
+# token can see. Coexists with the static hosts.yml in this same
+# directory: Ansible merges both when you point `-i` at the dir.
+#
+# Use cases:
+#   - Operate on VMs that already exist (configure, inventory,
+#     ad-hoc commands) without having to list them manually.
+#   - Keep hosts.yml for VMs to be cloned (new ones) and let
+#     this plugin pick up every live VM.
+#
+# How to invoke:
+#   ansible-inventory -i inventories/proxmox/ --graph
+#   ansible-inventory -i inventories/proxmox/ --list
+#   ansible-playbook  -i inventories/proxmox/ playbooks/configure-vm.yml \
+#       --limit all_running_proxmox
+#
+# Credentials are read from the same env vars as the rest of the
+# Proxmox side: PROXMOX_API_HOST, PROXMOX_API_TOKEN_SECRET.
+# ============================================================
+
+plugin: community.proxmox.proxmox
+
+# API endpoint + auth — shared with the clone/configure flow.
+url: "https://{{ lookup('env', 'PROXMOX_API_HOST') | default('192.168.1.10', true) }}:8006"
+user: "ansible@pam"
+token_id: "ci"
+token_secret: "{{ lookup('env', 'PROXMOX_API_TOKEN_SECRET') }}"
+validate_certs: false
+
+# What to pull in.
+want_facts: true          # fetch VM status, config, agent info
+qemu_extended_statuses: true
+
+# Group VMs automatically by useful dimensions.
+group_prefix: "proxmox_"   # groups come out as proxmox_running, proxmox_stopped, …
+want_proxmox_nodes_ansible_host: false   # don't inject nodes themselves as hosts
+
+# Make the live VMs reachable over SSH when the agent returned an IP.
+# Falls back to the VM name (DNS) if no IP is known.
+compose:
+  ansible_host: >-
+    (proxmox_agent_interfaces | default([]) |
+     map(attribute='ip-addresses') | flatten |
+     map(attribute='ip-address') |
+     reject('match', '^127\\.') |
+     reject('match', '^::1') |
+     reject('match', '^fe80:') |
+     list | first) | default(proxmox_name, true)
+
+# Tag-based grouping — any Proxmox tag becomes an Ansible group.
+# A VM tagged "docker" ends up in the "docker" group automatically; add the
+# tag "docker_hosts" in Proxmox to feed into the specialization play directly.
+keyed_groups:
+  - key: proxmox_tags_parsed
+    prefix: ""
+    separator: ""
+  - key: proxmox_node
+    prefix: "node"
+    separator: "_"
+
+# Convenience: everything the API returned.
+# Access with: {{ hostvars['vmname'].proxmox_vmid }} etc.

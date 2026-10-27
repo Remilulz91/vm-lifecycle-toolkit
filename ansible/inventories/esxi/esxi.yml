@@ -1,0 +1,59 @@
+---
+# ============================================================
+# Dynamic inventory — standalone ESXi (V3.7.6+)
+# ============================================================
+#
+# Queries the ESXi SOAP API via pyvmomi and lists every VM
+# the account can see. Coexists with the static hosts.yml in
+# this same directory.
+#
+# Credentials are read from the same env vars as the rest of
+# the ESXi side: ESXI_HOSTNAME, ESXI_USERNAME, ESXI_PASSWORD.
+#
+# How to invoke:
+#   ansible-inventory -i inventories/esxi/ --graph
+#   ansible-inventory -i inventories/esxi/ --list
+# ============================================================
+
+plugin: community.vmware.vmware_vm_inventory
+
+hostname: "{{ lookup('env', 'ESXI_HOSTNAME') | default('esxi01.lan', true) }}"
+username: "{{ lookup('env', 'ESXI_USERNAME') | default('root', true) }}"
+password: "{{ lookup('env', 'ESXI_PASSWORD') }}"
+validate_certs: false
+
+# Fetch common properties — enough to drive SSH connection + grouping
+# without pulling the full vSphere object tree every time.
+properties:
+  - name
+  - runtime.powerState
+  - guest.ipAddress
+  - guest.hostName
+  - config.guestFullName
+  - config.annotation
+  - config.hardware.numCPU
+  - config.hardware.memoryMB
+
+# Flatten the VMware object path "." into "_" for use as Jinja attributes.
+with_nested_properties: true
+
+# Expose a usable ansible_host from the guest IP, falling back to the
+# in-vSphere name when VMware Tools haven't reported an IP yet.
+compose:
+  ansible_host: "guest.ipAddress | default(name, true)"
+  esxi_powered_on: "runtime.powerState == 'poweredOn'"
+
+# Group VMs by useful dimensions.
+keyed_groups:
+  - key: runtime.powerState
+    prefix: "esxi_power"
+    separator: "_"
+  - key: config.guestFullName
+    prefix: "esxi_guest_os"
+    separator: "_"
+
+# Hide VMs the account can see but you never want Ansible to touch
+# (template helpers, infra appliances, etc.). Regex, not glob.
+# filters:
+#   - "'template' not in name | lower"
+#   - "runtime.powerState == 'poweredOn'"

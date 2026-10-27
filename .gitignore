@@ -51,6 +51,7 @@ ansible/venv/               # populated by: python3 -m venv venv
 ansible/ansible.log         # populated by Ansible at runtime (log_path in ansible.cfg)
 ansible/offline-bundle/     # populated by: scripts/prepare-offline-bundle.sh
 ansible/ovf-sources/        # OVF/OVA bundles exported from Packer-built ESXi templates (binary, large)
+ansible/.inventory-cache/   # Ansible dynamic inventory cache (JSONFile plugin)
 
 # ---------- Secrets & keys (never commit) ----------
 *.pem
