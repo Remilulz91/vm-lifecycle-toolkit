@@ -28,7 +28,8 @@ ansible/
 ├── playbooks/
 │   ├── clone-from-template.yml          # Step 1 (Proxmox): clone + start
 │   ├── deploy-from-ovf.yml              # Step 1 (ESXi): deploy OVF + start
-│   └── configure-vm.yml                 # Step 2: SSH-based baseline config (both hypervisors)
+│   ├── configure-vm.yml                 # Step 2: SSH-based baseline config (both hypervisors)
+│   └── decommission-vm.yml              ← V3.7.7: Destructive teardown (both hypervisors)
 ├── roles/
 │   ├── proxmox_clone/                   # Role: clone + optional SSH wait
 │   │   ├── defaults/main.yml
@@ -56,8 +57,14 @@ ansible/
 │   │   ├── handlers/main.yml
 │   │   ├── tasks/main.yml
 │   │   └── README.md
-│   └── esxi_deploy/                     # V3.7.5: Deploy VM from OVF to standalone ESXi
-│       ├── defaults/main.yml
+│   ├── esxi_deploy/                     # V3.7.5: Deploy VM from OVF to standalone ESXi
+│   │   ├── defaults/main.yml
+│   │   ├── tasks/main.yml
+│   │   └── README.md
+│   ├── proxmox_decommission/            # V3.7.7: Stop + delete a Proxmox VM
+│   │   ├── tasks/main.yml
+│   │   └── README.md
+│   └── esxi_decommission/               # V3.7.7: Power-off + delete an ESXi VM
 │       ├── tasks/main.yml
 │       └── README.md
 ├── scripts/
@@ -309,6 +316,29 @@ ansible-playbook -i inventories/proxmox/ playbooks/configure-vm.yml \
 
 **Caching**: `ansible.cfg` enables the JSONFile cache (5-minute TTL) under `./.inventory-cache/` (gitignored) — so repeated `ansible-inventory`/`ansible-playbook` runs don't hammer the hypervisor API. Clear it manually with `rm -rf .inventory-cache/` if you need a fresh fetch.
 
+### 9. Decommissioning VMs (V3.7.7+)
+
+The `decommission-vm.yml` playbook permanently deletes VMs — disks, config, VMX files, the lot. It covers both hypervisors in one run and is **safety-gated**: it refuses to start without an explicit extra-var.
+
+```bash
+# Decommission ONE Proxmox VM (safest form)
+ansible-playbook -i inventories/proxmox/ playbooks/decommission-vm.yml \
+    --limit debian-example-01 \
+    -e confirm_decommission=yes
+
+# Decommission ONE ESXi VM
+ansible-playbook -i inventories/esxi/ playbooks/decommission-vm.yml \
+    --limit debian-esxi-01 \
+    -e confirm_decommission=yes
+```
+
+Design properties:
+
+- **Explicit confirmation** — the first play runs on `localhost` and asserts `confirm_decommission=yes`. Any other value, or omission, aborts the run before any API call fires.
+- **`serial: 1`** — VMs are torn down one at a time. If you mistakenly target too wide a scope, the mistake stops after the first VM and the rest survive.
+- **Idempotent** — a VM that's already gone (another operator deleted it, or the role already ran) is skipped cleanly via `meta: end_host`, not treated as an error.
+- **Same groups as clone/deploy** — `proxmox_clones` + `windows_clones` on the Proxmox side, `esxi_clones` + `esxi_windows_clones` on the ESXi side.
+
 ## 📦 Offline / Air-Gapped setup
 
 The entire VM Lifecycle Toolkit is designed to also run in an **air-gapped internal network** with no internet access. The Packer side already supports this (plugin cache — see top-level [BUILD.md](../BUILD.md)). The Ansible side has the same workflow via two helper scripts in `ansible/scripts/`.
@@ -389,8 +419,8 @@ Make sure to override the `proxmox_api_token_secret` lookup in `group_vars/all.y
 - **V3.7.3**           — Specialized roles: `docker_host` + `webserver` (nginx), chained via inventory groups
 - **V3.7.4**           — Windows baseline role `base_config_windows` + `windows_clones` inventory group
 - **V3.7.5**           — Standalone ESXi deploy via OVF (`esxi_deploy` role + `inventories/esxi/` + `deploy-from-ovf.yml`)
-- **V3.7.6 (current)** — Dynamic inventory for Proxmox + ESXi (`inventories/*/proxmox.yml` and `esxi.yml`), inventory cache
-- **V3.7.7 (planned)** — Decommission playbook (clean VM teardown)
+- **V3.7.6**           — Dynamic inventory for Proxmox + ESXi (`inventories/*/proxmox.yml` and `esxi.yml`), inventory cache
+- **V3.7.7 (current)** — Decommission playbook + roles (`decommission-vm.yml`, `proxmox_decommission`, `esxi_decommission`) with a mandatory confirmation gate
 
 ## 📜 License
 

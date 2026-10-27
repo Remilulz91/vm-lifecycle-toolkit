@@ -1,0 +1,65 @@
+---
+# ============================================================
+# Decommission VMs — Proxmox + standalone ESXi
+# ============================================================
+#
+# DESTRUCTIVE playbook. Powers off and permanently deletes
+# every targeted VM (disks + config + files).
+#
+# Safety gate: the playbook REFUSES to run without the explicit
+# extra-var `confirm_decommission=yes`. Combine with --limit to
+# scope the action to specific hosts.
+#
+# Usage:
+#
+#   # Decommission ONE specific VM
+#   ansible-playbook -i inventories/proxmox/ playbooks/decommission-vm.yml \
+#       --limit debian-example-01 \
+#       -e confirm_decommission=yes
+#
+#   # Decommission every VM in the Proxmox inventory (dangerous)
+#   ansible-playbook -i inventories/proxmox/ playbooks/decommission-vm.yml \
+#       -e confirm_decommission=yes
+#
+#   # Decommission ESXi VMs the same way
+#   ansible-playbook -i inventories/esxi/ playbooks/decommission-vm.yml \
+#       --limit debian-esxi-01 \
+#       -e confirm_decommission=yes
+#
+# `serial: 1` is used throughout so a mistake stops after exactly
+# one VM instead of nuking the whole inventory in parallel.
+# ============================================================
+
+- name: Safety gate — refuse to run without explicit confirmation
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Verify that the operator explicitly confirmed decommission
+      ansible.builtin.assert:
+        that:
+          - confirm_decommission is defined
+          - (confirm_decommission | string | lower) == 'yes'
+        fail_msg: >-
+          REFUSED. This playbook permanently deletes VMs.
+          Re-run with:  -e confirm_decommission=yes
+          Combine with --limit <host> to scope the action.
+
+# ----- Proxmox decommission -----
+- name: Decommission Proxmox VMs
+  hosts: proxmox_clones:windows_clones
+  gather_facts: false
+  connection: local
+  serial: 1
+
+  roles:
+    - role: proxmox_decommission
+
+# ----- ESXi decommission -----
+- name: Decommission ESXi VMs
+  hosts: esxi_clones:esxi_windows_clones
+  gather_facts: false
+  connection: local
+  serial: 1
+
+  roles:
+    - role: esxi_decommission

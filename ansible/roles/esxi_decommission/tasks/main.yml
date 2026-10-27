@@ -1,0 +1,60 @@
+---
+# ============================================================
+# esxi_decommission — role tasks
+# ============================================================
+# Powers off a VM on standalone ESXi and removes it (disks + files).
+# Destructive — guarded by the `confirm_decommission` play-level
+# gate in decommission-vm.yml.
+# ============================================================
+
+- name: Validate required inventory variables
+  ansible.builtin.assert:
+    that:
+      - target_name is defined
+    fail_msg: >-
+      Each inventory host must define target_name — esxi_decommission
+      uses it to locate the VM on the ESXi host.
+
+- name: Look up current VM state (so we can skip a missing one cleanly)
+  community.vmware.vmware_vm_info:
+    hostname: "{{ esxi_hostname }}"
+    username: "{{ esxi_username }}"
+    password: "{{ esxi_password }}"
+    validate_certs: "{{ esxi_validate_certs }}"
+    vm_name: "{{ target_name }}"
+  register: vm_info
+  delegate_to: localhost
+  failed_when: false
+
+- name: Skip host — VM does not exist on this ESXi host
+  ansible.builtin.meta: end_host
+  when: (vm_info.virtual_machines | default([]) | length) == 0
+
+- name: Power off the VM (forced)
+  community.vmware.vmware_guest_powerstate:
+    hostname: "{{ esxi_hostname }}"
+    username: "{{ esxi_username }}"
+    password: "{{ esxi_password }}"
+    validate_certs: "{{ esxi_validate_certs }}"
+    name: "{{ target_name }}"
+    datacenter: "ha-datacenter"
+    state: powered-off
+    force: true
+  delegate_to: localhost
+
+- name: Delete the VM (disks + files)
+  community.vmware.vmware_guest:
+    hostname: "{{ esxi_hostname }}"
+    username: "{{ esxi_username }}"
+    password: "{{ esxi_password }}"
+    validate_certs: "{{ esxi_validate_certs }}"
+    name: "{{ target_name }}"
+    datacenter: "ha-datacenter"
+    state: absent
+    force: true
+  delegate_to: localhost
+
+- name: Report decommission success
+  ansible.builtin.debug:
+    msg: >-
+      Decommissioned {{ target_name }} from ESXi host {{ esxi_hostname }}.

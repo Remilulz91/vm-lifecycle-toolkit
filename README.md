@@ -1,7 +1,7 @@
 # 🧱 VM Lifecycle Toolkit — Build & Deploy VMs on Proxmox and ESXi
 
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v3.7.6-blue.svg)](README.md)
+[![Version](https://img.shields.io/badge/version-v3.7.7-blue.svg)](README.md)
 [![Packer](https://img.shields.io/badge/Packer-%E2%89%A51.11.0-blueviolet.svg)](https://www.packer.io/)
 [![Hypervisors](https://img.shields.io/badge/Hypervisors-Proxmox%20%7C%20ESXi-orange.svg)](README.md)
 [![OSes](https://img.shields.io/badge/OSes-Debian%20%7C%20Ubuntu%20%7C%20Windows%2011-green.svg)](README.md)
@@ -121,14 +121,17 @@ vm-lifecycle-toolkit/
 │  ├─ playbooks/
 │  │  ├─ clone-from-template.yml                (step 1 Proxmox: clone + start, Proxmox API)
 │  │  ├─ deploy-from-ovf.yml                    ← V3.7.5: step 1 ESXi: OVF deploy via community.vmware
-│  │  └─ configure-vm.yml                       ← V3.7.2: step 2 baseline config over SSH (both hypervisors)
+│  │  ├─ configure-vm.yml                       ← V3.7.2: step 2 baseline config over SSH (both hypervisors)
+│  │  └─ decommission-vm.yml                    ← V3.7.7: destructive teardown (both hypervisors, confirm-gated)
 │  ├─ roles/
 │  │  ├─ proxmox_clone/                         (role: clone + optional SSH wait)
 │  │  ├─ base_config/                           ← V3.7.2: hostname, tz, admin user, SSH hardening
 │  │  ├─ docker_host/                           ← V3.7.3: Docker CE + Compose plugin
 │  │  ├─ webserver/                             ← V3.7.3: nginx + demo vhost
 │  │  ├─ base_config_windows/                   ← V3.7.4: Windows baseline (SSH + PowerShell)
-│  │  └─ esxi_deploy/                           ← V3.7.5: OVF deploy to standalone ESXi
+│  │  ├─ esxi_deploy/                           ← V3.7.5: OVF deploy to standalone ESXi
+│  │  ├─ proxmox_decommission/                  ← V3.7.7: stop + delete Proxmox VM
+│  │  └─ esxi_decommission/                     ← V3.7.7: power-off + delete ESXi VM
 │  ├─ scripts/                                  ← V3.7.1: Air-gapped bundle helpers
 │  │  ├─ prepare-offline-bundle.sh              (online host: pack collections + wheels)
 │  │  └─ install-offline-bundle.sh              (offline host: install from local bundle)
@@ -138,6 +141,14 @@ vm-lifecycle-toolkit/
 ├─ LICENSE
 └─ README.md
 ```
+
+✔ What changed in V3.7.7?
+
+- **Closes the lifecycle loop** — clone/deploy → configure → **decommission**. The toolkit now covers every stage of a VM's life on both hypervisors.
+- **New playbook `decommission-vm.yml`** — permanently deletes VMs (disks + config + VMX files). Covers Proxmox + ESXi in one run. Mandatory **`confirm_decommission=yes` extra-var** gate on `localhost` before any destructive task fires. **`serial: 1`** throughout so a scoping mistake stops after one VM instead of nuking the inventory in parallel.
+- **New role `proxmox_decommission`** — looks up the VM via `community.proxmox.proxmox_vm_info` (missing VM = clean skip via `meta: end_host`), forced stop, then full delete via `community.proxmox.proxmox_kvm` with `state: absent`.
+- **New role `esxi_decommission`** — same shape against standalone ESXi: `community.vmware.vmware_vm_info` lookup, forced power-off via `vmware_guest_powerstate`, full delete via `community.vmware.vmware_guest` with `state: absent, force: true`.
+- **Idempotent** — a VM already deleted elsewhere is skipped cleanly rather than failing the run.
 
 ✔ What changed in V3.7.6?
 
@@ -471,5 +482,5 @@ The copyright holder reserves the right to revoke this limited viewing permissio
 
 **Author:** Rémi Rousselot  
 **Project:** VM Lifecycle Toolkit  
-**Version:** V3.7.6  
+**Version:** V3.7.7  
 **Contact:** [remi.rousselot91@gmail.com](mailto:remi.rousselot91@gmail.com)

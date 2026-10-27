@@ -1,0 +1,66 @@
+---
+# ============================================================
+# proxmox_decommission — role tasks
+# ============================================================
+# Stops a VM on Proxmox and removes it (disks + config).
+# Destructive — guarded by the `confirm_decommission` play-level
+# gate in decommission-vm.yml.
+# ============================================================
+
+- name: Validate required inventory variables
+  ansible.builtin.assert:
+    that:
+      - target_vmid is defined
+      - target_name is defined
+    fail_msg: >-
+      Each inventory host must define target_vmid and target_name
+      — proxmox_decommission needs both to find and remove the VM.
+
+- name: Look up current VM status
+  community.proxmox.proxmox_vm_info:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ proxmox_api_user }}"
+    api_token_id: "{{ proxmox_api_token_id.split('!')[1] }}"
+    api_token_secret: "{{ proxmox_api_token_secret }}"
+    validate_certs: "{{ proxmox_api_validate_certs }}"
+    node: "{{ proxmox_node }}"
+    vmid: "{{ target_vmid }}"
+  register: vm_info
+  failed_when: false
+
+- name: Skip host — VM does not exist on this node
+  ansible.builtin.meta: end_host
+  when:
+    - vm_info.proxmox_vms is not defined
+    - (vm_info.proxmox_vms | default([]) | length) == 0
+
+- name: Stop the VM if running
+  community.proxmox.proxmox_kvm:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ proxmox_api_user }}"
+    api_token_id: "{{ proxmox_api_token_id.split('!')[1] }}"
+    api_token_secret: "{{ proxmox_api_token_secret }}"
+    validate_certs: "{{ proxmox_api_validate_certs }}"
+    node: "{{ proxmox_node }}"
+    vmid: "{{ target_vmid }}"
+    state: stopped
+    force: true
+    timeout: "{{ clone_timeout_seconds | default(600) }}"
+
+- name: Delete the VM (disks + config)
+  community.proxmox.proxmox_kvm:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ proxmox_api_user }}"
+    api_token_id: "{{ proxmox_api_token_id.split('!')[1] }}"
+    api_token_secret: "{{ proxmox_api_token_secret }}"
+    validate_certs: "{{ proxmox_api_validate_certs }}"
+    node: "{{ proxmox_node }}"
+    vmid: "{{ target_vmid }}"
+    state: absent
+    timeout: "{{ clone_timeout_seconds | default(600) }}"
+
+- name: Report decommission success
+  ansible.builtin.debug:
+    msg: >-
+      Decommissioned {{ target_name }} (vmid={{ target_vmid }})
+      from Proxmox node {{ proxmox_node }}.
