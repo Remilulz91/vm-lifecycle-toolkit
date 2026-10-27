@@ -1,7 +1,7 @@
 # 🧱 VM Lifecycle Toolkit — Build & Deploy VMs on Proxmox and ESXi
 
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v3.7-blue.svg)](README.md)
+[![Version](https://img.shields.io/badge/version-v3.7.1-blue.svg)](README.md)
 [![Packer](https://img.shields.io/badge/Packer-%E2%89%A51.11.0-blueviolet.svg)](https://www.packer.io/)
 [![Hypervisors](https://img.shields.io/badge/Hypervisors-Proxmox%20%7C%20ESXi-orange.svg)](README.md)
 [![OSes](https://img.shields.io/badge/OSes-Debian%20%7C%20Ubuntu%20%7C%20Windows%2011-green.svg)](README.md)
@@ -122,12 +122,23 @@ vm-lifecycle-toolkit/
 │  │  └─ clone-from-template.yml                (entry-point playbook)
 │  ├─ roles/
 │  │  └─ proxmox_clone/                         (role: clone + optional SSH wait)
+│  ├─ scripts/                                  ← V3.7.1: Air-gapped bundle helpers
+│  │  ├─ prepare-offline-bundle.sh              (online host: pack collections + wheels)
+│  │  └─ install-offline-bundle.sh              (offline host: install from local bundle)
 │  └─ README.md
 │
 ├─ terraform/                                   ← [Planned V3.8+] VM cloning via Terraform
 ├─ LICENSE
 └─ README.md
 ```
+
+✔ What changed in V3.7.1?
+
+- **Offline / air-gapped support for the Ansible side** — the whole toolkit (Packer + Ansible + future Terraform) is designed to run in an internal network with no internet access. Packer already had this (plugin cache, V3.4+); Ansible now matches.
+- New helper script `ansible/scripts/prepare-offline-bundle.sh`: on an **online** host, downloads every Ansible collection declared in `requirements.yml` (via `ansible-galaxy collection download`) and every Python wheel from `requirements.txt` (via `pip download`), then packs them into a single self-contained `offline-bundle-<timestamp>.tar.gz`.
+- New helper script `ansible/scripts/install-offline-bundle.sh`: on the **offline** host, creates `ansible/venv/`, installs the Python deps with `pip --no-index --find-links`, and installs the Ansible collections with `ansible-galaxy collection install --offline`. No contact with PyPI or Galaxy at any point.
+- Documentation added to `ansible/README.md` (dedicated "Offline / Air-Gapped setup" section) and to the roadmap.
+- `.gitignore` updated to exclude `ansible/offline-bundle/`.
 
 ✔ What changed in V3.7?
 
@@ -399,5 +410,5 @@ The copyright holder reserves the right to revoke this limited viewing permissio
 
 **Author:** Rémi Rousselot  
 **Project:** VM Lifecycle Toolkit  
-**Version:** V3.7  
+**Version:** V3.7.1  
 **Contact:** [remi.rousselot91@gmail.com](mailto:remi.rousselot91@gmail.com)

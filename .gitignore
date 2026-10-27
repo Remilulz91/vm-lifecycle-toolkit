@@ -49,6 +49,7 @@ hosts.local
 ansible/collections/        # populated by: ansible-galaxy collection install
 ansible/venv/               # populated by: python3 -m venv venv
 ansible/ansible.log         # populated by Ansible at runtime (log_path in ansible.cfg)
+ansible/offline-bundle/     # populated by: scripts/prepare-offline-bundle.sh
 
 # ---------- Secrets & keys (never commit) ----------
 *.pem
