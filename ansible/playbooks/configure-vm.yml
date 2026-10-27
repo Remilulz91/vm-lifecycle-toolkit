@@ -76,3 +76,23 @@
 
   roles:
     - role: webserver
+
+# ----- 4. Windows baseline (V3.7.4+) -----
+- name: Baseline configuration for Windows VMs
+  hosts: windows_clones
+  gather_facts: true
+  # No `become`: on Windows SSH + PowerShell, the admin user is already
+  # elevated. Any task needing SYSTEM runs its own ACL/privilege handling.
+
+  pre_tasks:
+    - name: Verify that target_ip is defined for this Windows host
+      ansible.builtin.assert:
+        that:
+          - target_ip is defined
+          - target_ip | length > 0
+        fail_msg: >-
+          target_ip must be set in inventory for host {{ inventory_hostname }}
+          — configure-vm.yml connects over SSH and cannot work without it.
+
+  roles:
+    - role: base_config_windows

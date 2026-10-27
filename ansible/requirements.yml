@@ -24,3 +24,8 @@ collections:
   # Standard POSIX modules (file permissions, synchronize, authorized_key, etc.)
   - name: ansible.posix
     version: ">=1.5.0"
+
+  # Windows modules (win_user, win_hostname, win_timezone, win_reboot,
+  # win_copy, win_firewall_rule, etc.) — required by base_config_windows (V3.7.4+).
+  - name: ansible.windows
+    version: ">=2.0.0"

@@ -35,12 +35,17 @@ ansible/
 │   │   ├── handlers/main.yml
 │   │   ├── tasks/main.yml
 │   │   └── README.md
-│   └── webserver/                       # V3.7.3: Install nginx + demo vhost
+│   ├── webserver/                       # V3.7.3: Install nginx + demo vhost
+│   │   ├── defaults/main.yml
+│   │   ├── handlers/main.yml
+│   │   ├── tasks/main.yml
+│   │   ├── templates/vhost.conf.j2
+│   │   ├── templates/index.html.j2
+│   │   └── README.md
+│   └── base_config_windows/             # V3.7.4: Windows baseline (hostname, tz, admin, SSH)
 │       ├── defaults/main.yml
 │       ├── handlers/main.yml
 │       ├── tasks/main.yml
-│       ├── templates/vhost.conf.j2
-│       ├── templates/index.html.j2
 │       └── README.md
 ├── scripts/
 │   ├── prepare-offline-bundle.sh        # (online host) build an air-gapped bundle
@@ -203,6 +208,34 @@ Then rerun `configure-vm.yml`. Each VM gets `base_config` first, then any specia
 - `docker_hosts`: installs Docker CE + Compose plugin, adds `admin` to the `docker` group. See [roles/docker_host/README.md](roles/docker_host/README.md).
 - `webservers`: installs nginx and deploys a demo vhost on port 80. See [roles/webserver/README.md](roles/webserver/README.md).
 
+### 6. Windows VMs (V3.7.4+)
+
+List Windows targets under the **`windows_clones`** group — a parallel group to `proxmox_clones`, not nested under it (keeps the Linux and Windows plays cleanly separated and avoids running `base_config` on a Windows guest):
+
+```yaml
+all:
+  children:
+    windows_clones:
+      hosts:
+        windows-example-01:
+          source_template_vmid: 1101
+          target_vmid: 2101
+          target_name: "windows-ex-01"       # <= 15 chars (NetBIOS)
+          target_cores: 4
+          target_memory_mb: 8192
+          target_ip: "192.168.1.230"
+```
+
+`clone-from-template.yml` targets `proxmox_clones:windows_clones` (both at once — the Proxmox API clone is OS-agnostic). `configure-vm.yml` has a 4th play dedicated to `windows_clones` that applies the `base_config_windows` role.
+
+Connection to Windows is **SSH + PowerShell** (OpenSSH Server is pre-installed by the Packer Windows templates):
+- `ansible_connection: ssh`
+- `ansible_shell_type: powershell`
+- `ansible_user`: the Packer admin user (default `packer`, override via `PACKER_WINDOWS_SSH_USER`)
+- Same `ADMIN_SSH_PUBLIC_KEY` env var as the Linux role — one key for all VMs
+
+The Windows admin user's authorized key goes to **`C:\ProgramData\ssh\administrators_authorized_keys`** (the OpenSSH Windows quirk: per-user `~/.ssh/authorized_keys` is ignored for anyone in the Administrators group). The role sets the ACL on that file to `SYSTEM` + `BUILTIN\Administrators` only.
+
 ## 📦 Offline / Air-Gapped setup
 
 The entire VM Lifecycle Toolkit is designed to also run in an **air-gapped internal network** with no internet access. The Packer side already supports this (plugin cache — see top-level [BUILD.md](../BUILD.md)). The Ansible side has the same workflow via two helper scripts in `ansible/scripts/`.
@@ -280,8 +313,8 @@ Make sure to override the `proxmox_api_token_secret` lookup in `group_vars/all.y
 - **V3.7**             — Clone VMs from Packer templates (minimal, Proxmox only)
 - **V3.7.1**           — Offline / air-gapped bundle scripts for Ansible deps
 - **V3.7.2**           — Baseline post-clone role `base_config` + `configure-vm.yml` playbook (Debian/Ubuntu)
-- **V3.7.3 (current)** — Specialized roles: `docker_host` + `webserver` (nginx), chained via inventory groups
-- **V3.7.4 (planned)** — Windows baseline (`base_config_windows`)
+- **V3.7.3**           — Specialized roles: `docker_host` + `webserver` (nginx), chained via inventory groups
+- **V3.7.4 (current)** — Windows baseline role `base_config_windows` + `windows_clones` inventory group
 - **V3.7.5 (planned)** — ESXi support (OVF deploy via `community.vmware` modules)
 - **V3.7.6 (planned)** — Dynamic inventory (query Proxmox for existing VMs)
 - **V3.7.7 (planned)** — Decommission playbook (clean VM teardown)

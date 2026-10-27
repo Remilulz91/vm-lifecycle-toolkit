@@ -1,0 +1,27 @@
+---
+# ============================================================
+# Windows-specific connection + role variables
+# ============================================================
+# Loaded automatically for every host in the `windows_clones` group.
+# ============================================================
+
+# ---------- SSH connection ----------
+# Windows targets are reached over SSH (OpenSSH Server was installed
+# by the Packer template) with PowerShell as the remote shell.
+ansible_connection: ssh
+ansible_shell_type: powershell
+ansible_user: "{{ lookup('env', 'PACKER_WINDOWS_SSH_USER') | default('packer', true) }}"
+ansible_ssh_private_key_file: "{{ lookup('env', 'PACKER_SSH_PRIVATE_KEY') | default('~/.ssh/id_ed25519', true) }}"
+ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+
+# ---------- Clone defaults for Windows VMs ----------
+# Windows VMs typically want more RAM/CPU than the Linux defaults.
+# Override per-host in hosts.yml if needed.
+clone_timeout_seconds: 1200
+ssh_wait_timeout_seconds: 600
+
+# ---------- base_config_windows role settings ----------
+# Reuse the same ADMIN_SSH_PUBLIC_KEY env var as the Linux side.
+base_config_windows_admin_user: "admin"
+base_config_windows_admin_ssh_public_key: "{{ lookup('env', 'ADMIN_SSH_PUBLIC_KEY') }}"
+base_config_windows_timezone: "Romance Standard Time"

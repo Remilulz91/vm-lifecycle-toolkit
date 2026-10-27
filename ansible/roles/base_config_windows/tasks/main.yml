@@ -1,0 +1,132 @@
+---
+# ============================================================
+# base_config_windows — role tasks
+# ============================================================
+# Applies the baseline configuration to a freshly cloned Windows
+# VM (Windows 10/11, Server 2019/2022) that was built by the
+# Packer side with OpenSSH Server pre-installed:
+#   - rename computer (reboot if needed)
+#   - set timezone
+#   - create local 'admin' user, member of Administrators
+#   - deploy its SSH public key into
+#     %ProgramData%\ssh\administrators_authorized_keys
+#     (this is the special shared file Windows OpenSSH uses for
+#      ALL members of the Administrators group — a per-user
+#      ~/.ssh/authorized_keys is IGNORED for admin users)
+#   - harden sshd_config (disable password auth)
+# ============================================================
+
+- name: Fail fast on missing admin SSH public key
+  ansible.builtin.assert:
+    that:
+      - base_config_windows_admin_ssh_public_key is defined
+      - base_config_windows_admin_ssh_public_key | length > 0
+    fail_msg: >-
+      base_config_windows_admin_ssh_public_key must be set — either via
+      ADMIN_SSH_PUBLIC_KEY env var, or directly in group_vars. Without a
+      key, the admin user would be unreachable once password auth is
+      disabled.
+
+# ---------- Hostname ----------
+- name: Set Windows hostname
+  ansible.windows.win_hostname:
+    name: "{{ base_config_windows_hostname }}"
+  register: windows_hostname_result
+
+- name: Reboot after rename-computer (if the hostname actually changed)
+  ansible.windows.win_reboot:
+    reboot_timeout: "{{ base_config_windows_reboot_timeout }}"
+    msg: "VM Lifecycle Toolkit: rebooting after hostname change"
+  when:
+    - base_config_windows_reboot_after_rename | bool
+    - windows_hostname_result.reboot_required | default(false)
+
+# ---------- Timezone ----------
+- name: Set Windows timezone
+  ansible.windows.win_timezone:
+    timezone: "{{ base_config_windows_timezone }}"
+
+# ---------- Admin user ----------
+- name: Ensure admin user exists and is a local Administrator
+  ansible.windows.win_user:
+    name: "{{ base_config_windows_admin_user }}"
+    groups:
+      - Administrators
+    groups_action: add
+    state: present
+    password_never_expires: true
+    user_cannot_change_password: false
+    account_disabled: false
+    # No password is set — the user authenticates with SSH key only.
+    # win_user accepts no 'password' when creating via SSH, so we skip
+    # it on purpose; the account exists but has no interactive password.
+
+# ---------- OpenSSH: administrators_authorized_keys ----------
+# For members of the local Administrators group, Windows OpenSSH does
+# NOT read %USERPROFILE%\.ssh\authorized_keys — it reads a single
+# shared file instead: %ProgramData%\ssh\administrators_authorized_keys
+# (owner must be SYSTEM or Administrators, no 'Everyone' / 'Users' ACL).
+
+- name: Ensure the Windows OpenSSH config directory exists
+  ansible.windows.win_file:
+    path: C:\ProgramData\ssh
+    state: directory
+
+- name: Deploy admin SSH key via administrators_authorized_keys
+  ansible.windows.win_copy:
+    content: "{{ base_config_windows_admin_ssh_public_key }}\r\n"
+    dest: C:\ProgramData\ssh\administrators_authorized_keys
+  notify: Restart sshd (Windows)
+
+- name: Lock down administrators_authorized_keys ACL (SYSTEM + Administrators only)
+  ansible.windows.win_shell: |
+    $Acl = Get-Acl "C:\ProgramData\ssh\administrators_authorized_keys"
+    $Acl.SetAccessRuleProtection($True, $False)
+    $Acl.Access | ForEach-Object { [void]$Acl.RemoveAccessRule($_) }
+    $Admin  = New-Object System.Security.AccessControl.FileSystemAccessRule(
+                "BUILTIN\Administrators", "FullControl", "Allow")
+    $System = New-Object System.Security.AccessControl.FileSystemAccessRule(
+                "NT AUTHORITY\SYSTEM", "FullControl", "Allow")
+    $Acl.AddAccessRule($Admin)
+    $Acl.AddAccessRule($System)
+    Set-Acl "C:\ProgramData\ssh\administrators_authorized_keys" $Acl
+  changed_when: false
+
+# ---------- SSH hardening ----------
+- name: Harden sshd_config — disable password authentication
+  ansible.windows.win_lineinfile:
+    path: C:\ProgramData\ssh\sshd_config
+    regex: '^#?\s*PasswordAuthentication\s'
+    line: "PasswordAuthentication no"
+    state: present
+  when: base_config_windows_harden_ssh | bool
+  notify: Restart sshd (Windows)
+
+- name: Ensure PubkeyAuthentication stays enabled
+  ansible.windows.win_lineinfile:
+    path: C:\ProgramData\ssh\sshd_config
+    regex: '^#?\s*PubkeyAuthentication\s'
+    line: "PubkeyAuthentication yes"
+    state: present
+  when: base_config_windows_harden_ssh | bool
+  notify: Restart sshd (Windows)
+
+# ---------- Firewall ----------
+- name: Ensure the OpenSSH Server firewall rule is enabled on port 22
+  ansible.windows.win_firewall_rule:
+    name: "OpenSSH-Server-In-TCP"
+    localport: 22
+    action: allow
+    direction: in
+    protocol: tcp
+    enabled: true
+    state: present
+
+- name: Report base_config_windows success
+  ansible.builtin.debug:
+    msg: >-
+      base_config_windows complete on {{ inventory_hostname }}:
+      hostname={{ base_config_windows_hostname }},
+      tz={{ base_config_windows_timezone }},
+      admin_user={{ base_config_windows_admin_user }},
+      ssh_hardened={{ base_config_windows_harden_ssh }}.

@@ -1,0 +1,9 @@
+---
+# ============================================================
+# base_config_windows — handlers
+# ============================================================
+
+- name: Restart sshd (Windows)
+  ansible.windows.win_service:
+    name: sshd
+    state: restarted

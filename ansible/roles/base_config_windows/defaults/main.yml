@@ -1,0 +1,39 @@
+---
+# ============================================================
+# base_config_windows — default variables
+# ============================================================
+
+# Hostname applied to the VM. Defaults to the inventory host name
+# (which equals target_name for VMs produced by the clone role).
+# Windows truncates to 15 chars for NetBIOS — pick names accordingly.
+base_config_windows_hostname: "{{ inventory_hostname }}"
+
+# Windows timezone — must be an exact Windows TZ id (NOT an IANA one).
+# Examples: "Romance Standard Time" (Paris), "UTC",
+#           "Pacific Standard Time", "GMT Standard Time".
+# List them with: tzutil /l   (on any Windows box).
+base_config_windows_timezone: "Romance Standard Time"
+
+# Local admin user created on every configured Windows VM.
+# This user will be added to the local Administrators group and will
+# receive the SSH public key below. The role does NOT set a password:
+# access is strictly via SSH key.
+base_config_windows_admin_user: "admin"
+
+# Reuse the same env-fed key as the Linux base_config.
+# REQUIRED — the role fails fast if empty.
+base_config_windows_admin_ssh_public_key: >-
+  {{ base_config_admin_ssh_public_key | default(lookup('env', 'ADMIN_SSH_PUBLIC_KEY')) }}
+
+# Reboot after rename-computer (required for the new hostname to take effect).
+# Set to false if you want to batch reboots yourself.
+base_config_windows_reboot_after_rename: true
+
+# Reboot timeout (seconds) for win_reboot.
+base_config_windows_reboot_timeout: 600
+
+# Harden sshd on Windows:
+#   - disable password authentication
+#   - keep PubkeyAuthentication yes
+#   - keep the Administrators-group authorized_keys file for admin users
+base_config_windows_harden_ssh: true

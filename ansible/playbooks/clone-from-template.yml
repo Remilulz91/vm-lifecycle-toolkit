@@ -11,6 +11,7 @@
 #   export PROXMOX_API_TOKEN_SECRET=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 #
 #   # Clone every VM listed in inventories/proxmox/hosts.yml
+#   # (covers both Linux `proxmox_clones` and Windows `windows_clones`)
 #   ansible-playbook playbooks/clone-from-template.yml
 #
 #   # Or clone only one specific VM from the inventory
@@ -18,7 +19,9 @@
 # ============================================================
 
 - name: Clone VMs from Packer-built Proxmox templates
-  hosts: proxmox_clones
+  # Covers both Linux (proxmox_clones) and Windows (windows_clones) targets:
+  # the cloning operation is OS-agnostic — only the Proxmox API is involved.
+  hosts: proxmox_clones:windows_clones
   gather_facts: false
   # The target VM doesn't exist yet; we run everything from the controller.
   connection: local

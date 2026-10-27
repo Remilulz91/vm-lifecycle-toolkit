@@ -1,7 +1,7 @@
 # 🧱 VM Lifecycle Toolkit — Build & Deploy VMs on Proxmox and ESXi
 
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v3.7.3-blue.svg)](README.md)
+[![Version](https://img.shields.io/badge/version-v3.7.4-blue.svg)](README.md)
 [![Packer](https://img.shields.io/badge/Packer-%E2%89%A51.11.0-blueviolet.svg)](https://www.packer.io/)
 [![Hypervisors](https://img.shields.io/badge/Hypervisors-Proxmox%20%7C%20ESXi-orange.svg)](README.md)
 [![OSes](https://img.shields.io/badge/OSes-Debian%20%7C%20Ubuntu%20%7C%20Windows%2011-green.svg)](README.md)
@@ -125,7 +125,8 @@ vm-lifecycle-toolkit/
 │  │  ├─ proxmox_clone/                         (role: clone + optional SSH wait)
 │  │  ├─ base_config/                           ← V3.7.2: hostname, tz, admin user, SSH hardening
 │  │  ├─ docker_host/                           ← V3.7.3: Docker CE + Compose plugin
-│  │  └─ webserver/                             ← V3.7.3: nginx + demo vhost
+│  │  ├─ webserver/                             ← V3.7.3: nginx + demo vhost
+│  │  └─ base_config_windows/                   ← V3.7.4: Windows baseline (SSH + PowerShell)
 │  ├─ scripts/                                  ← V3.7.1: Air-gapped bundle helpers
 │  │  ├─ prepare-offline-bundle.sh              (online host: pack collections + wheels)
 │  │  └─ install-offline-bundle.sh              (offline host: install from local bundle)
@@ -135,6 +136,15 @@ vm-lifecycle-toolkit/
 ├─ LICENSE
 └─ README.md
 ```
+
+✔ What changed in V3.7.4?
+
+- **New role `base_config_windows`** — baseline post-clone configuration for Windows 10 / 11 and Server 2019 / 2022 VMs built by the Packer side. Applied over **SSH + PowerShell** (OpenSSH Server is pre-installed by the Packer Windows templates). Covers: `win_hostname` with optional reboot via `win_reboot`, `win_timezone`, local admin user in `Administrators` group via `win_user`, SSH public key deployed to `C:\ProgramData\ssh\administrators_authorized_keys` with ACL locked to `SYSTEM` + `BUILTIN\Administrators` only, `sshd_config` hardening (`PasswordAuthentication no`, `PubkeyAuthentication yes`), and the `OpenSSH-Server-In-TCP` firewall rule enforced on port 22.
+- **New inventory group `windows_clones`** — parallel to `proxmox_clones`. The clone playbook now targets `proxmox_clones:windows_clones` (the Proxmox API clone is OS-agnostic). The configure playbook gets a 4th play dedicated to `windows_clones`.
+- **New `group_vars/windows_clones.yml`** — Windows connection vars (`ansible_connection: ssh`, `ansible_shell_type: powershell`), `ansible_user` from `PACKER_WINDOWS_SSH_USER` env var (default `packer`), reused `ADMIN_SSH_PUBLIC_KEY` env var for the admin key, longer clone/SSH timeouts (1200s / 600s) for Windows.
+- **`ansible.windows` collection** added to `requirements.yml` (≥ 2.0.0). Re-run `prepare-offline-bundle.sh` to refresh the offline bundle if you use the air-gapped flow.
+- Fail-fast on missing admin SSH key, same as the Linux `base_config` role — avoids locking the VM out.
+- Explicit documentation of the Windows OpenSSH `administrators_authorized_keys` quirk in `roles/base_config_windows/README.md` (per-user `~/.ssh/authorized_keys` is ignored for admin accounts).
 
 ✔ What changed in V3.7.3?
 
@@ -432,5 +442,5 @@ The copyright holder reserves the right to revoke this limited viewing permissio
 
 **Author:** Rémi Rousselot  
 **Project:** VM Lifecycle Toolkit  
-**Version:** V3.7.3  
+**Version:** V3.7.4  
 **Contact:** [remi.rousselot91@gmail.com](mailto:remi.rousselot91@gmail.com)
