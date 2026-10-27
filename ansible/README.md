@@ -18,10 +18,16 @@ ansible/
 │       └── group_vars/
 │           └── all.yml                  # Shared vars (Proxmox endpoint, user, timeouts)
 ├── playbooks/
-│   └── clone-from-template.yml          # Entry-point: clone + optional SSH wait
+│   ├── clone-from-template.yml          # Step 1: clone + start (Proxmox API)
+│   └── configure-vm.yml                 # Step 2: SSH-based baseline config
 ├── roles/
-│   └── proxmox_clone/                   # Role encapsulating the clone logic
+│   ├── proxmox_clone/                   # Role: clone + optional SSH wait
+│   │   ├── defaults/main.yml
+│   │   ├── tasks/main.yml
+│   │   └── README.md
+│   └── base_config/                     # Role: hostname, tz, admin user, SSH hardening
 │       ├── defaults/main.yml
+│       ├── handlers/main.yml
 │       ├── tasks/main.yml
 │       └── README.md
 ├── scripts/
@@ -133,6 +139,26 @@ ansible-playbook playbooks/clone-from-template.yml
 ansible-playbook playbooks/clone-from-template.yml --limit my-new-debian
 ```
 
+### 4. Apply the baseline configuration (V3.7.2+)
+
+Once the VM is cloned, started, and reachable on `target_ip`, apply the baseline (hostname, timezone, base packages, admin user, SSH hardening):
+
+```bash
+# Public SSH key to deploy to the new 'admin' user on every VM
+export ADMIN_SSH_PUBLIC_KEY="$(cat ~/.ssh/id_ed25519.pub)"
+
+# Optional overrides for how Ansible SSHes into the Packer-built VM
+# (defaults: user=packer, key=~/.ssh/id_ed25519)
+# export PACKER_SSH_USER=packer
+# export PACKER_SSH_PRIVATE_KEY=~/.ssh/id_ed25519
+
+ansible-playbook playbooks/configure-vm.yml
+# or just one VM:
+ansible-playbook playbooks/configure-vm.yml --limit my-new-debian
+```
+
+After the playbook runs, SSH as the new admin: `ssh admin@<target_ip>`. Password authentication and root login are disabled.
+
 ## 📦 Offline / Air-Gapped setup
 
 The entire VM Lifecycle Toolkit is designed to also run in an **air-gapped internal network** with no internet access. The Packer side already supports this (plugin cache — see top-level [BUILD.md](../BUILD.md)). The Ansible side has the same workflow via two helper scripts in `ansible/scripts/`.
@@ -207,12 +233,13 @@ Make sure to override the `proxmox_api_token_secret` lookup in `group_vars/all.y
 
 ## 🔮 Roadmap
 
-- **V3.7**            — Clone VMs from Packer templates (minimal, Proxmox only)
-- **V3.7.1 (current)** — Offline / air-gapped bundle scripts for Ansible deps
-- **V3.7.2 (planned)** — Post-clone configuration roles (`base_config`, `docker_host`, `webserver`, etc.)
-- **V3.7.3 (planned)** — ESXi support (OVF deploy via `community.vmware` modules)
-- **V3.7.4 (planned)** — Dynamic inventory (query Proxmox for existing VMs)
-- **V3.7.5 (planned)** — Decommission playbook (clean VM teardown)
+- **V3.7**             — Clone VMs from Packer templates (minimal, Proxmox only)
+- **V3.7.1**           — Offline / air-gapped bundle scripts for Ansible deps
+- **V3.7.2 (current)** — Baseline post-clone role `base_config` + `configure-vm.yml` playbook (Debian/Ubuntu)
+- **V3.7.3 (planned)** — Specialized roles (`docker_host`, `webserver`, …) + Windows `base_config_windows`
+- **V3.7.4 (planned)** — ESXi support (OVF deploy via `community.vmware` modules)
+- **V3.7.5 (planned)** — Dynamic inventory (query Proxmox for existing VMs)
+- **V3.7.6 (planned)** — Decommission playbook (clean VM teardown)
 
 ## 📜 License
 

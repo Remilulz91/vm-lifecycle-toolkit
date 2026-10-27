@@ -1,0 +1,147 @@
+---
+# ============================================================
+# base_config — role tasks
+# ============================================================
+# Applies the baseline configuration to a freshly cloned VM:
+#   - hostname
+#   - timezone
+#   - base package set
+#   - single 'admin' user with SSH key + passwordless sudo
+#   - optional SSH hardening (no password auth, no root login)
+#   - optional full apt upgrade
+# ============================================================
+
+- name: Validate required variables
+  ansible.builtin.assert:
+    that:
+      - base_config_admin_ssh_public_key is defined
+      - base_config_admin_ssh_public_key | length > 0
+    fail_msg: >-
+      base_config_admin_ssh_public_key must be set (typically in
+      inventories/proxmox/group_vars/all.yml) before running this role.
+      Without an SSH key for the admin user, the VM would be
+      inaccessible after SSH hardening.
+
+# ---------- Hostname ----------
+- name: Set hostname
+  become: true
+  ansible.builtin.hostname:
+    name: "{{ base_config_hostname }}"
+    use: systemd
+
+- name: Ensure /etc/hosts has an entry for the new hostname
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '^127\.0\.1\.1\s'
+    line: "127.0.1.1 {{ base_config_hostname }}"
+    state: present
+    create: true
+    mode: "0644"
+
+# ---------- Timezone ----------
+- name: Set timezone
+  become: true
+  community.general.timezone:
+    name: "{{ base_config_timezone }}"
+
+# ---------- apt + base packages ----------
+- name: Update apt cache
+  become: true
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when: base_config_apt_update_cache | bool
+
+- name: Install base packages
+  become: true
+  ansible.builtin.apt:
+    name: "{{ base_config_packages }}"
+    state: present
+
+- name: Upgrade all installed packages (optional)
+  become: true
+  ansible.builtin.apt:
+    upgrade: dist
+    autoremove: true
+  when: base_config_apt_upgrade | bool
+
+# ---------- Admin user ----------
+- name: Ensure admin group exists
+  become: true
+  ansible.builtin.group:
+    name: "{{ base_config_admin_user }}"
+    state: present
+
+- name: Create admin user
+  become: true
+  ansible.builtin.user:
+    name: "{{ base_config_admin_user }}"
+    group: "{{ base_config_admin_user }}"
+    groups: sudo
+    append: true
+    shell: /bin/bash
+    create_home: true
+    state: present
+
+- name: Deploy admin SSH public key
+  become: true
+  ansible.posix.authorized_key:
+    user: "{{ base_config_admin_user }}"
+    key: "{{ base_config_admin_ssh_public_key }}"
+    state: present
+    exclusive: false
+
+- name: Configure passwordless sudo for admin
+  become: true
+  ansible.builtin.copy:
+    dest: "/etc/sudoers.d/90-{{ base_config_admin_user }}"
+    content: "{{ base_config_admin_user }} ALL=(ALL) NOPASSWD:ALL\n"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: "visudo -cf %s"
+
+# ---------- SSH hardening ----------
+- name: Harden sshd — disable password authentication
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?\s*PasswordAuthentication\s'
+    line: "PasswordAuthentication no"
+    state: present
+    validate: "sshd -t -f %s"
+  when: base_config_harden_ssh | bool
+  notify: Restart ssh
+
+- name: Harden sshd — disable root login
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?\s*PermitRootLogin\s'
+    line: "PermitRootLogin no"
+    state: present
+    validate: "sshd -t -f %s"
+  when: base_config_harden_ssh | bool
+  notify: Restart ssh
+
+- name: Harden sshd — disable challenge-response auth
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?\s*(ChallengeResponseAuthentication|KbdInteractiveAuthentication)\s'
+    line: "KbdInteractiveAuthentication no"
+    state: present
+    validate: "sshd -t -f %s"
+  when: base_config_harden_ssh | bool
+  notify: Restart ssh
+
+- name: Report base_config success
+  ansible.builtin.debug:
+    msg: >-
+      base_config complete on {{ inventory_hostname }}:
+      hostname={{ base_config_hostname }},
+      tz={{ base_config_timezone }},
+      admin_user={{ base_config_admin_user }},
+      ssh_hardened={{ base_config_harden_ssh }},
+      apt_upgraded={{ base_config_apt_upgrade }}.

@@ -1,7 +1,7 @@
 # 🧱 VM Lifecycle Toolkit — Build & Deploy VMs on Proxmox and ESXi
 
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v3.7.1-blue.svg)](README.md)
+[![Version](https://img.shields.io/badge/version-v3.7.2-blue.svg)](README.md)
 [![Packer](https://img.shields.io/badge/Packer-%E2%89%A51.11.0-blueviolet.svg)](https://www.packer.io/)
 [![Hypervisors](https://img.shields.io/badge/Hypervisors-Proxmox%20%7C%20ESXi-orange.svg)](README.md)
 [![OSes](https://img.shields.io/badge/OSes-Debian%20%7C%20Ubuntu%20%7C%20Windows%2011-green.svg)](README.md)
@@ -119,9 +119,11 @@ vm-lifecycle-toolkit/
 │  │     ├─ hosts.yml                           (static inventory — VMs to clone)
 │  │     └─ group_vars/all.yml                  (Proxmox API endpoint, user, timeouts)
 │  ├─ playbooks/
-│  │  └─ clone-from-template.yml                (entry-point playbook)
+│  │  ├─ clone-from-template.yml                (step 1: clone + start, Proxmox API)
+│  │  └─ configure-vm.yml                       ← V3.7.2: step 2 baseline config over SSH
 │  ├─ roles/
-│  │  └─ proxmox_clone/                         (role: clone + optional SSH wait)
+│  │  ├─ proxmox_clone/                         (role: clone + optional SSH wait)
+│  │  └─ base_config/                           ← V3.7.2: hostname, tz, admin user, SSH hardening
 │  ├─ scripts/                                  ← V3.7.1: Air-gapped bundle helpers
 │  │  ├─ prepare-offline-bundle.sh              (online host: pack collections + wheels)
 │  │  └─ install-offline-bundle.sh              (offline host: install from local bundle)
@@ -131,6 +133,14 @@ vm-lifecycle-toolkit/
 ├─ LICENSE
 └─ README.md
 ```
+
+✔ What changed in V3.7.2?
+
+- **New role `base_config`** — baseline post-clone configuration applied over SSH on Debian/Ubuntu VMs: hostname, timezone, base package set (`sudo`, `curl`, `vim`, `htop`, `net-tools`, `rsync`, `ca-certificates`, `gnupg`), a single `admin` user with the operator's SSH key and passwordless sudo, and SSH hardening (`PasswordAuthentication no`, `PermitRootLogin no`, `KbdInteractiveAuthentication no`).
+- **New playbook `configure-vm.yml`** — step 2 of the lifecycle, run after `clone-from-template.yml`. Connects to each VM over SSH as the Packer-created user, applies `base_config`, and asserts `target_ip` is set in the inventory before starting.
+- Role fails fast if `base_config_admin_ssh_public_key` is missing — avoids locking the VM by hardening SSH without an admin key in place.
+- `group_vars/all.yml` extended with SSH connection vars (`ansible_host`, `ansible_user`, `ansible_ssh_private_key_file`) and the `base_config_*` settings. Public key passed via `ADMIN_SSH_PUBLIC_KEY` env var.
+- Specialized roles (`docker_host`, `webserver`) and Windows `base_config_windows` deferred to V3.7.3 as planned.
 
 ✔ What changed in V3.7.1?
 
@@ -410,5 +420,5 @@ The copyright holder reserves the right to revoke this limited viewing permissio
 
 **Author:** Rémi Rousselot  
 **Project:** VM Lifecycle Toolkit  
-**Version:** V3.7.1  
+**Version:** V3.7.2  
 **Contact:** [remi.rousselot91@gmail.com](mailto:remi.rousselot91@gmail.com)

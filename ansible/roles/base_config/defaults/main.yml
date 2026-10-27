@@ -1,0 +1,50 @@
+---
+# ============================================================
+# base_config — default variables
+# ============================================================
+#
+# Override any of these in inventories/proxmox/group_vars/all.yml
+# or per-host in inventories/proxmox/hosts.yml.
+# ============================================================
+
+# ---------- Hostname ----------
+# Hostname applied to the VM. Defaults to the inventory host name
+# (which, for VMs created by the clone role, equals target_name).
+base_config_hostname: "{{ inventory_hostname }}"
+
+# ---------- Timezone ----------
+base_config_timezone: "Europe/Paris"
+
+# ---------- Base packages ----------
+# Minimal useful set for every VM. Add more via group_vars if needed.
+base_config_packages:
+  - sudo
+  - curl
+  - wget
+  - vim
+  - htop
+  - net-tools
+  - ca-certificates
+  - rsync
+  - gnupg
+
+# ---------- Admin user ----------
+# Single admin user created on every cloned VM.
+# The SSH public key MUST be provided via the inventory
+# (e.g. group_vars/all.yml) — this role will NOT fall back to any
+# default key, by design.
+base_config_admin_user: "admin"
+# base_config_admin_ssh_public_key: "ssh-ed25519 AAAA...."   # set in group_vars/all.yml
+
+# ---------- SSH hardening ----------
+# Disable password authentication and root login after admin user
+# is created and reachable via its SSH key.
+base_config_harden_ssh: true
+
+# ---------- apt behavior ----------
+# Update the package cache before installing anything.
+base_config_apt_update_cache: true
+
+# Upgrade all installed packages after installing the base set.
+# Set to false for faster runs or if you prefer a controlled upgrade cadence.
+base_config_apt_upgrade: false

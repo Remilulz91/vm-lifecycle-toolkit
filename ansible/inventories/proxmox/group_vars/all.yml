@@ -41,3 +41,28 @@ clone_timeout_seconds: 600
 
 # Timeout (seconds) for waiting on SSH after start (used only if target_ip is set)
 ssh_wait_timeout_seconds: 300
+
+# ============================================================
+# SSH connection to the cloned VMs (used by configure-vm.yml)
+# ============================================================
+# Ansible connects to each cloned VM at its `target_ip` (declared
+# per-host in hosts.yml), as the user Packer created in the template.
+# Override SSH user / key / port here if your Packer templates differ.
+# ------------------------------------------------------------
+ansible_host: "{{ target_ip | default(omit) }}"
+ansible_user: "{{ lookup('env', 'PACKER_SSH_USER') | default('packer', true) }}"
+ansible_ssh_private_key_file: "{{ lookup('env', 'PACKER_SSH_PRIVATE_KEY') | default('~/.ssh/id_ed25519', true) }}"
+ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+
+# ============================================================
+# base_config role — admin user settings
+# ============================================================
+# The SSH public key that will be deployed to the new 'admin' user
+# on every configured VM. This is REQUIRED by the base_config role.
+# Set it via env var ADMIN_SSH_PUBLIC_KEY or override here directly.
+# ------------------------------------------------------------
+base_config_admin_user: "admin"
+base_config_admin_ssh_public_key: "{{ lookup('env', 'ADMIN_SSH_PUBLIC_KEY') }}"
+
+# Timezone applied by base_config. Override per host or per group as needed.
+base_config_timezone: "Europe/Paris"

@@ -1,0 +1,10 @@
+---
+# ============================================================
+# base_config — handlers
+# ============================================================
+
+- name: Restart ssh
+  become: true
+  ansible.builtin.service:
+    name: ssh
+    state: restarted
